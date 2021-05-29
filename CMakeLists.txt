@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.5)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+file(GLOB SOURCES
+    *.h
+    *.cpp
+)
+
+project(vulcan_project)
+add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic) #-Wno-zero-as-null-pointer-constant)
+
+include_directories(C:/VulkanSDK/1.1.108.0/Include/vulkan)
+target_link_libraries(${PROJECT_NAME} C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib)
