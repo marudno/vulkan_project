@@ -8,7 +8,7 @@ file(GLOB SOURCES
     *.cpp
 )
 
-project(vulcan_project)
+project(vulkan_project)
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic) #-Wno-zero-as-null-pointer-constant)
@@ -22,5 +22,6 @@ elseif(UNIX)
 
 include_directories(/home/ola/vulkan/1.1.108.0/x86_64/include/vulkan)
 target_link_libraries(${PROJECT_NAME} /home/ola/vulkan/1.1.108.0/x86_64/lib/libvulkan.so)
+target_link_libraries(${PROJECT_NAME} wayland-client)
 
 endif()

@@ -127,14 +127,36 @@ void Engine::createDevice()
     res = vkEnumeratePhysicalDevices(mInstance, &physicalDeviceCount, physicalDevices.data());
     assertVkSuccess(res, "failed to enumerate physical devices");
 
+    bool found = false;
+
     for(const auto& pd : physicalDevices)
     {
         vkGetPhysicalDeviceProperties(pd, &mPhysicalDeviceProperties);
-        if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+        if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
         {
             mPhysicalDevice = pd;
+            found = true;
             break;
         }
+    }
+
+    if(!found)
+    {
+        for(const auto& pd : physicalDevices)
+        {
+            vkGetPhysicalDeviceProperties(pd, &mPhysicalDeviceProperties);
+            if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+            {
+                mPhysicalDevice = pd;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if(!found)
+    {
+        throw std::runtime_error("failed to find physical device");
     }
 
     uint32_t queueFamilyPropertyCount;
@@ -214,6 +236,7 @@ void Engine::createDevice()
 
 void Engine::createSurface()
 {
+#ifdef VK_USE_PLATFORM_WIN32_KHR
     VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo {};
     win32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     win32SurfaceCreateInfo.pNext = NULL;
@@ -223,7 +246,18 @@ void Engine::createSurface()
 
     VkResult res = vkCreateWin32SurfaceKHR(mInstance, &win32SurfaceCreateInfo, NULL, &mSurface);
     assertVkSuccess(res, "failed to create win32 surface");
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+    VkWaylandSurfaceCreateInfoKHR waylandSurfaceCreateInfo {};
+    waylandSurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+    waylandSurfaceCreateInfo.pNext = NULL;
+    waylandSurfaceCreateInfo.flags = 0;
+    waylandSurfaceCreateInfo.display = mWindow.getDisplay();
+    waylandSurfaceCreateInfo.surface = mWindow.getSurface(); //surface waylandowy, ten mSurface bedzie vulkanowy
 
+    VkResult res = vkCreateWaylandSurfaceKHR(mInstance, &waylandSurfaceCreateInfo, NULL, &mSurface);
+    assertVkSuccess(res, "failed to create wayland surface");
+
+#endif
     res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &mSurfaceCapabilities);
     assertVkSuccess(res, "failed to get surface capabilities");
 
@@ -362,7 +396,7 @@ void Engine::createRenderPass()
     attachmentDescriptions[0].flags = 0; //indeks 0 - colorattachment
     attachmentDescriptions[0].format;
     attachmentDescriptions[0].samples;
-    attachmentDescriptions[0].loadOp = ;
+    attachmentDescriptions[0].loadOp;
     attachmentDescriptions[0].storeOp;
     attachmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     attachmentDescriptions[0].finalLayout;
@@ -381,10 +415,10 @@ void Engine::createRenderPass()
     renderPassCreateInfo.flags = 0;
     renderPassCreateInfo.attachmentCount = 2; //color and depth
     renderPassCreateInfo.pAttachments = attachmentDescriptions.data();
-    renderPassCreateInfo.
-    renderPassCreateInfo.
-    renderPassCreateInfo.
-    renderPassCreateInfo.
+//    renderPassCreateInfo.
+//    renderPassCreateInfo.
+//    renderPassCreateInfo.
+//    renderPassCreateInfo.
 
     VkResult res = vkCreateRenderPass(mDevice, &renderPassCreateInfo, NULL, &mRenderPass);
     assertVkSuccess(res, "failed to create renderpass");
@@ -447,13 +481,9 @@ void Engine::run()
 {
     uint32_t imageIndex = 1;
 
-    MSG msg {};
     while(mRun)
     {
-        GetMessage(&msg, NULL, 0, 0);
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-
+        mWindow.handleEvents();
         render((imageIndex % mFramesInFlight));
         imageIndex++;
     }

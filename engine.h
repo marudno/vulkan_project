@@ -1,11 +1,11 @@
 #ifndef ENGINE_H
 #define ENGINE_H
-#define VK_USE_PLATFORM_WIN32_KHR 1
-#define VK_PLATFORM_SURFACE_EXTENSION_NAME VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+#include "window.h" //jeśli zaincludowane w pluku .h to nie ma potrzeby w pliku .cpp
 #include <vulkan.h>
 #include <string_view>
-#include "window.h" //jeśli zaincludowane w pluku .h to nie ma potrzeby w pliku .cpp
 #include <vector>
+
+
 
 class Engine
 {
