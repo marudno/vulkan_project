@@ -393,6 +393,26 @@ void Engine::createSemaphore()
 
 void Engine::createRenderPass()
 {
+    std::vector<VkAttachmentReference> inputAttachment(2);
+    inputAttachment[0].attachment = 0;
+    inputAttachment[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    inputAttachment[1].attachment = 1;
+    inputAttachment[1].layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    mSubpass.flags = 0;
+    mSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    mSubpass.inputAttachmentCount = 0;
+    mSubpass.pInputAttachments = NULL;
+    mSubpass.colorAttachmentCount = 1;
+    mSubpass.pColorAttachments = &inputAttachment[0];
+    mSubpass.pResolveAttachments = NULL;
+    mSubpass.pDepthStencilAttachment = &inputAttachment[1];
+    mSubpass.preserveAttachmentCount = 0;
+    mSubpass.pPreserveAttachments = NULL;
+
+    std::vector<VkAttachmentDescription> attachmentDescriptions(2);
+
     attachmentDescriptions[0].flags = 0; //indeks 0 - colorattachment
     attachmentDescriptions[0].format;
     attachmentDescriptions[0].samples;
@@ -401,7 +421,7 @@ void Engine::createRenderPass()
     attachmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     attachmentDescriptions[0].finalLayout;
 
-    attachmentDescriptions[1].flags = 0; //indeks 0 - depthattachment
+    attachmentDescriptions[1].flags = 0; //indeks 1 - depthattachment
     attachmentDescriptions[1].format;
     attachmentDescriptions[1].samples;
     attachmentDescriptions[1].loadOp ;
@@ -415,10 +435,10 @@ void Engine::createRenderPass()
     renderPassCreateInfo.flags = 0;
     renderPassCreateInfo.attachmentCount = 2; //color and depth
     renderPassCreateInfo.pAttachments = attachmentDescriptions.data();
-//    renderPassCreateInfo.
-//    renderPassCreateInfo.
-//    renderPassCreateInfo.
-//    renderPassCreateInfo.
+    renderPassCreateInfo.subpassCount = 1;
+    renderPassCreateInfo.pSubpasses;
+    renderPassCreateInfo.dependencyCount;
+    renderPassCreateInfo.pDependencies;
 
     VkResult res = vkCreateRenderPass(mDevice, &renderPassCreateInfo, NULL, &mRenderPass);
     assertVkSuccess(res, "failed to create renderpass");

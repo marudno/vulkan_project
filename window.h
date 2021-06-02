@@ -42,7 +42,4 @@ private:
     wl_surface* mSurface = nullptr;
 };
 #endif // _WIN32
-
-
-
 #endif // WINDOW_H

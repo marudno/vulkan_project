@@ -68,7 +68,7 @@ private:
 
     /*--------- renderpass ---------*/
     VkRenderPass mRenderPass;
-    std::vector<VkAttachmentDescription> attachmentDescriptions = std::vector<VkAttachmentDescription>(2);
+    VkSubpassDescription mSubpass {};
 };
 
 #endif // ENGINE_H

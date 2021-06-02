@@ -83,7 +83,7 @@ LRESULT Window::myWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     }
 }
 
-void Winodw::handleEvents()
+void Window::handleEvents()
 {
     MSG msg {};
     GetMessage(&msg, NULL, 0, 0);
