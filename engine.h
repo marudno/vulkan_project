@@ -21,10 +21,12 @@ private:
     void createDevice();
     void createSurface();
     void createSwapchain();
+    void createDepthImage();
     void createCommandBuffer();
     void createFence();
     void createSemaphore();
     void createRenderPass();
+    void createFrameBuffer();
     void render(uint32_t i);
 
     bool mRun = true;
@@ -69,6 +71,9 @@ private:
     /*--------- renderpass ---------*/
     VkRenderPass mRenderPass;
     VkSubpassDescription mSubpass {};
+
+    /*-------- framebuffer ---------*/
+    VkFramebuffer mFramebuffer;
 };
 
 #endif // ENGINE_H

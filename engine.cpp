@@ -12,10 +12,13 @@ Engine::Engine() : mWindow(this)  //m_window musi być zdefiniowane tutaj bo pod
     createCommandBuffer();
     createFence();
     createSemaphore();
+    createRenderPass();
+    createFrameBuffer();
 }
 
 Engine::~Engine()
 {
+    vkDestroyFramebuffer(mDevice, mFramebuffer, NULL);
     vkDestroyRenderPass(mDevice, mRenderPass, NULL);
     vkDestroySemaphore(mDevice, mQueueSubmitSemaphore, NULL);
     vkDestroyFence(mDevice, mQueueSubmitFence, NULL);
@@ -342,6 +345,28 @@ void Engine::createSwapchain()
     }
 }
 
+void Engine::createDepthImage()
+{
+    VkImageCreateInfo depthImageCreateInfo {};
+    depthImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    depthImageCreateInfo.pNext = NULL;
+    depthImageCreateInfo.flags = 0;
+    depthImageCreateInfo.imageType;
+    depthImageCreateInfo.format;
+    depthImageCreateInfo.extent;
+    depthImageCreateInfo.mipLevels;
+    depthImageCreateInfo.arrayLayers;
+    depthImageCreateInfo.samples;
+    depthImageCreateInfo.tiling;
+    depthImageCreateInfo.usage;
+    depthImageCreateInfo.sharingMode;
+    depthImageCreateInfo.queueFamilyIndexCount = mQueueCount;
+    depthImageCreateInfo.pQueueFamilyIndices;
+    depthImageCreateInfo.initialLayout;
+
+    VkResult res = vkCreateImage(mDevice, depthImageCreateInfo, NULL, &depthImage);
+}
+
 void Engine::createCommandBuffer()
 {
     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
@@ -393,41 +418,44 @@ void Engine::createSemaphore()
 
 void Engine::createRenderPass()
 {
-    std::vector<VkAttachmentReference> inputAttachment(2);
-    inputAttachment[0].attachment = 0;
-    inputAttachment[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference colorAttachment;
+    colorAttachment.attachment = 0;
+    colorAttachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    inputAttachment[1].attachment = 1;
-    inputAttachment[1].layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference depthAttachment;
+    depthAttachment.attachment = 1;
+    depthAttachment.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     mSubpass.flags = 0;
     mSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     mSubpass.inputAttachmentCount = 0;
     mSubpass.pInputAttachments = NULL;
     mSubpass.colorAttachmentCount = 1;
-    mSubpass.pColorAttachments = &inputAttachment[0];
+    mSubpass.pColorAttachments = &colorAttachment;
     mSubpass.pResolveAttachments = NULL;
-    mSubpass.pDepthStencilAttachment = &inputAttachment[1];
+    mSubpass.pDepthStencilAttachment = &depthAttachment;
     mSubpass.preserveAttachmentCount = 0;
     mSubpass.pPreserveAttachments = NULL;
 
     std::vector<VkAttachmentDescription> attachmentDescriptions(2);
 
     attachmentDescriptions[0].flags = 0; //indeks 0 - colorattachment
-    attachmentDescriptions[0].format;
-    attachmentDescriptions[0].samples;
-    attachmentDescriptions[0].loadOp;
-    attachmentDescriptions[0].storeOp;
-    attachmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachmentDescriptions[0].finalLayout;
+    attachmentDescriptions[0].format = mSwapchainImageFormat;               // !!!!!!!!!!!!!!!!!!!!!!!
+    attachmentDescriptions[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachmentDescriptions[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachmentDescriptions[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachmentDescriptions[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     attachmentDescriptions[1].flags = 0; //indeks 1 - depthattachment
-    attachmentDescriptions[1].format;
-    attachmentDescriptions[1].samples;
-    attachmentDescriptions[1].loadOp ;
-    attachmentDescriptions[1].storeOp;
-    attachmentDescriptions[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachmentDescriptions[1].finalLayout;
+    attachmentDescriptions[1].format = VK_FORMAT_D32_SFLOAT;
+    attachmentDescriptions[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachmentDescriptions[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachmentDescriptions[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentDescriptions[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachmentDescriptions[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachmentDescriptions[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    attachmentDescriptions[1].finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     VkRenderPassCreateInfo renderPassCreateInfo {}; // jeśli będę zapisywać globalnie TO USUNĄC NOWĄ DEKLARACJĘ
     renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -436,12 +464,29 @@ void Engine::createRenderPass()
     renderPassCreateInfo.attachmentCount = 2; //color and depth
     renderPassCreateInfo.pAttachments = attachmentDescriptions.data();
     renderPassCreateInfo.subpassCount = 1;
-    renderPassCreateInfo.pSubpasses;
-    renderPassCreateInfo.dependencyCount;
-    renderPassCreateInfo.pDependencies;
+    renderPassCreateInfo.pSubpasses = &mSubpass;
+    renderPassCreateInfo.dependencyCount = 0;
+    renderPassCreateInfo.pDependencies = NULL;
 
     VkResult res = vkCreateRenderPass(mDevice, &renderPassCreateInfo, NULL, &mRenderPass);
     assertVkSuccess(res, "failed to create renderpass");
+}
+
+void Engine::createFrameBuffer()
+{
+    VkFramebufferCreateInfo framebufferCreateInfo {};
+    framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferCreateInfo.pNext = NULL;
+    framebufferCreateInfo.flags = 0;
+    framebufferCreateInfo.renderPass = mRenderPass;
+    framebufferCreateInfo.attachmentCount;
+    framebufferCreateInfo.pAttachments;
+    framebufferCreateInfo.width;
+    framebufferCreateInfo.height;
+    framebufferCreateInfo.layers;
+
+    VkResult res = vkCreateFramebuffer(mDevice, &framebufferCreateInfo, NULL, &mFramebuffer);
+    assertVkSuccess(res, "failed to create framebuffer");
 }
 
 void Engine::render(uint32_t imageIndex)
