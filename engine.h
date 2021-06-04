@@ -30,6 +30,7 @@ private:
     void render(uint32_t i);
 
     bool mRun = true;
+    uint32_t findMemoryProperties(VkPhysicalDeviceMemoryProperties* memoryProperties, uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties);
 
     /*------- instance ------------*/
     VkInstance mInstance = VK_NULL_HANDLE;
@@ -37,6 +38,7 @@ private:
     /*----- physical device -------*/
     VkPhysicalDeviceProperties mPhysicalDeviceProperties = {};
     VkPhysicalDevice mPhysicalDevice = VK_NULL_HANDLE;
+    VkPhysicalDeviceMemoryProperties mDeviceMemoryProperties;
 
     /*--------- queues ------------*/
     VkQueueFamilyProperties mQueueFamilyProperties = {};
@@ -55,25 +57,28 @@ private:
     VkSwapchainKHR mSwapchain = VK_NULL_HANDLE;
     std::vector<VkImage> mSwapchainImages;
     VkFormat mSwapchainImageFormat;
-    VkImageViewCreateInfo mImageViewCreateInfo;
+    VkImageViewCreateInfo mImageViewCreateInfo {};
     std::vector<VkImageView> mImageViews;
 
+    /*------- depth image/view -----*/
+    VkImage mDepthImage = VK_NULL_HANDLE;
+
     /*------- command buffer -------*/
-    VkCommandPool mCommandPool;
+    VkCommandPool mCommandPool = VK_NULL_HANDLE;
     uint32_t mFramesInFlight = 2; //ile będzie jednocześnie command bufferów
     std::vector<VkCommandBuffer> mCommandBuffers = std::vector<VkCommandBuffer>(2);
     VkCommandBufferBeginInfo mCommandBufferBeginInfo = {};
 
     /*--- fences and semaphores ----*/
-    VkFence mQueueSubmitFence;
-    VkSemaphore mQueueSubmitSemaphore;
+    VkFence mQueueSubmitFence = VK_NULL_HANDLE;
+    VkSemaphore mQueueSubmitSemaphore = VK_NULL_HANDLE;
 
     /*--------- renderpass ---------*/
-    VkRenderPass mRenderPass;
+    VkRenderPass mRenderPass = VK_NULL_HANDLE;
     VkSubpassDescription mSubpass {};
 
     /*-------- framebuffer ---------*/
-    VkFramebuffer mFramebuffer;
+    VkFramebuffer mFramebuffer = VK_NULL_HANDLE;
 };
 
 #endif // ENGINE_H

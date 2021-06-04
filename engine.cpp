@@ -118,6 +118,27 @@ void Engine::createInstance()
     assertVkSuccess(res, "failed to create instance");
 }
 
+uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties *memoryProperties, uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties)
+{
+    const uint32_t memoryCount = memoryProperties->memoryTypeCount;
+
+    for(uint32_t memoryIndex = 0; memoryIndex < memoryCount; memoryIndex++)
+    {
+        const uint32_t memoryTypeBits = (1 << memoryIndex); //zapis??????
+        const bool isRequiredMemoryType = memoryTypeBitsRequirement & memoryTypeBits;
+
+        const VkMemoryPropertyFlags properties = memoryProperties->memoryTypes[memoryIndex].propertyFlags;
+        const bool hasRequiredProperties = (properties && requiredProperties) == requiredProperties;
+
+        if(isRequiredMemoryType && hasRequiredProperties)
+        {
+            return static_cast<uint32_t>(memoryIndex);
+        }
+    }
+
+    throw std::runtime_error("failed to find memory properties");
+}
+
 void Engine::createDevice()
 {
     VkResult res;
@@ -235,6 +256,19 @@ void Engine::createDevice()
     assertVkSuccess(res,"failed to create device");
 
     vkGetDeviceQueue(mDevice, mQueueFamilyIndex, 0, &mQueue);
+
+    //TODO: sprawdzić jak flagi zależą od typów karty graficznej
+    uint32_t memoryTypeBitsRequirement = 1;
+    std::vector<VkMemoryPropertyFlags> requiredProperties(2);
+
+    if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+    {
+        memoryTypeBitsRequirement = 7;
+    }
+
+    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
+    findMemoryProperties(mDeviceMemoryProperties, memoryTypeBitsRequirement, );
+
 }
 
 void Engine::createSurface()
@@ -364,7 +398,7 @@ void Engine::createDepthImage()
     depthImageCreateInfo.pQueueFamilyIndices;
     depthImageCreateInfo.initialLayout;
 
-    VkResult res = vkCreateImage(mDevice, depthImageCreateInfo, NULL, &depthImage);
+    VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &mDepthImage);
 }
 
 void Engine::createCommandBuffer()
