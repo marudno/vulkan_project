@@ -267,7 +267,7 @@ void Engine::createDevice()
     }
 
     vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
-    findMemoryProperties(mDeviceMemoryProperties, memoryTypeBitsRequirement, );
+//    findMemoryProperties(mDeviceMemoryProperties, memoryTypeBitsRequirement, );
 
 }
 
@@ -399,6 +399,7 @@ void Engine::createDepthImage()
     depthImageCreateInfo.initialLayout;
 
     VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &mDepthImage);
+    assertVkSuccess(res, "failed to create depth image");
 }
 
 void Engine::createCommandBuffer()
