@@ -110,6 +110,11 @@ namespace global
     }
 
     static const wl_registry_listener registry_listeners = {registry_handler, registry_remover};
+
+//    static void create_window()
+//    {
+//        egl_window = wl_egl_window_create(Window::getSurface())
+//    }
 }
 
 

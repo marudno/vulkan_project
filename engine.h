@@ -5,14 +5,12 @@
 #include <string_view>
 #include <vector>
 
-
-
 class Engine
 {
 public:
     Engine();
     ~Engine();
-    void run(); //bo aplikacja chodzi w pętli, która będzie się znajdować w tej funkcji
+    void run(); //aplikacja chodzi w pętli, która będzie się znajdować w tej funkcji
     void stop();
 
 private:

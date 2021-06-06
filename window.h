@@ -1,7 +1,7 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
-class Engine; //bo w engine include window.h, nie można zaincludować tutaj engine.h bo zrobi się pętla, więc trzeba stworzyć defenicję
+class Engine; //bo w engine include window.h
 
 #if(_WIN32)
 #include <windows.h>

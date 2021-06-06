@@ -3,7 +3,8 @@
 #include <vector>
 #include <cstring>
 
-Engine::Engine() : mWindow(this)  //m_window musi być zdefiniowane tutaj bo podczas tworzenia Engine i ono powstanie i jest zależne od Engine
+//m_window musi być zdefiniowane tutaj bo powstanie podczas tworzenia Engine i jest zależne od Engine
+Engine::Engine() : mWindow(this)
 {
     createInstance();
     createDevice();
@@ -13,12 +14,12 @@ Engine::Engine() : mWindow(this)  //m_window musi być zdefiniowane tutaj bo pod
     createFence();
     createSemaphore();
     createRenderPass();
-    createFrameBuffer();
+//    createFrameBuffer();
 }
 
 Engine::~Engine()
 {
-    vkDestroyFramebuffer(mDevice, mFramebuffer, NULL);
+//    vkDestroyFramebuffer(mDevice, mFramebuffer, NULL);
     vkDestroyRenderPass(mDevice, mRenderPass, NULL);
     vkDestroySemaphore(mDevice, mQueueSubmitSemaphore, NULL);
     vkDestroyFence(mDevice, mQueueSubmitFence, NULL);
@@ -188,7 +189,7 @@ void Engine::createDevice()
     std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyPropertyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &queueFamilyPropertyCount, queueFamilyProperties.data());
 
-    for(mQueueFamilyIndex = 0; mQueueFamilyIndex < queueFamilyProperties.size(); mQueueFamilyIndex++)  //lepiej wybrać .size() bo ograniczamy się do wektora, count niekoniecznie prawdziwe(?)
+    for(mQueueFamilyIndex = 0; mQueueFamilyIndex < queueFamilyProperties.size(); mQueueFamilyIndex++) //lepiej wybrać .size() bo ograniczamy się do wektora, count niekoniecznie prawdziwe(?)
     {
         if((queueFamilyProperties[mQueueFamilyIndex].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT)
         {
@@ -209,7 +210,7 @@ void Engine::createDevice()
 
     uint32_t propertyCount = 0;
 
-    res = vkEnumerateDeviceExtensionProperties(mPhysicalDevice, NULL, &propertyCount, NULL); //funkcja zwraca do propertycount liczbę extension
+    res = vkEnumerateDeviceExtensionProperties(mPhysicalDevice, NULL, &propertyCount, NULL);
     assertVkSuccess(res, "failed to enumerate device properties");
     std::vector<VkExtensionProperties> extensionProperties(propertyCount);
     res = vkEnumerateDeviceExtensionProperties(mPhysicalDevice, NULL, &propertyCount, extensionProperties.data());
@@ -258,15 +259,15 @@ void Engine::createDevice()
     vkGetDeviceQueue(mDevice, mQueueFamilyIndex, 0, &mQueue);
 
     //TODO: sprawdzić jak flagi zależą od typów karty graficznej
-    uint32_t memoryTypeBitsRequirement = 1;
-    std::vector<VkMemoryPropertyFlags> requiredProperties(2);
+//    uint32_t memoryTypeBitsRequirement = 1;
+//    std::vector<VkMemoryPropertyFlags> requiredProperties(2);
 
-    if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
-    {
-        memoryTypeBitsRequirement = 7;
-    }
+//    if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+//    {
+//        memoryTypeBitsRequirement = 7;
+//    }
 
-    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
+//    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
 //    findMemoryProperties(mDeviceMemoryProperties, memoryTypeBitsRequirement, );
 
 }
@@ -289,11 +290,10 @@ void Engine::createSurface()
     waylandSurfaceCreateInfo.pNext = NULL;
     waylandSurfaceCreateInfo.flags = 0;
     waylandSurfaceCreateInfo.display = mWindow.getDisplay();
-    waylandSurfaceCreateInfo.surface = mWindow.getSurface(); //surface waylandowy, ten mSurface bedzie vulkanowy
+    waylandSurfaceCreateInfo.surface = mWindow.getSurface(); //surface waylandowy, mSurface bedzie vulkanowy
 
     VkResult res = vkCreateWaylandSurfaceKHR(mInstance, &waylandSurfaceCreateInfo, NULL, &mSurface);
     assertVkSuccess(res, "failed to create wayland surface");
-
 #endif
     res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &mSurfaceCapabilities);
     assertVkSuccess(res, "failed to get surface capabilities");
@@ -329,17 +329,27 @@ void Engine::createSwapchain()
     swapchainCreateInfo.minImageCount = (mSurfaceCapabilities.minImageCount + 1) < mSurfaceCapabilities.maxImageCount ? (mSurfaceCapabilities.minImageCount + 1) : mSurfaceCapabilities.minImageCount; // warunek ? jeśli true : jeśli false
     swapchainCreateInfo.imageFormat = mSurfaceFormats[0].format;
     swapchainCreateInfo.imageColorSpace = mSurfaceFormats[0].colorSpace;
-    swapchainCreateInfo.imageExtent = surfaceCapabilities.currentExtent;
     swapchainCreateInfo.imageArrayLayers = 1; //non-stereoscopic 3d app = 1
     swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; //dostęp do obrazka będzie mieć jednocześnie jedna rodzina kolejek
     swapchainCreateInfo.queueFamilyIndexCount = mQueueCount;
-    swapchainCreateInfo.pQueueFamilyIndices = VK_NULL_HANDLE; //zero bo SHARING_MODE_EXCLUSIVE
+    swapchainCreateInfo.pQueueFamilyIndices = VK_NULL_HANDLE; //zero bo ^SHARING_MODE_EXCLUSIVE
     swapchainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR; //brak transformacji
-    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;                         // SPRÓBOWAĆ INNĄ ALPHĘ
-    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; //v-sync
+    //TODO: sprobowac inna alphe
+    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // v-sync
     swapchainCreateInfo.clipped = VK_TRUE;
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+
+    if((mSurfaceCapabilities.currentExtent.width != 0xffffffff) && (mSurfaceCapabilities.currentExtent.height != 0xffffffff))
+    {
+        swapchainCreateInfo.imageExtent = surfaceCapabilities.currentExtent;
+    }
+    else
+    {
+        swapchainCreateInfo.imageExtent.width = 800;
+        swapchainCreateInfo.imageExtent.height = 600;
+    }
 
     mSwapchainImageFormat = swapchainCreateInfo.imageFormat;
 
@@ -351,10 +361,11 @@ void Engine::createSwapchain()
     res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &swapchainImageCount, NULL);
     assertVkSuccess(res, "failed to get swapchain images");
     mSwapchainImages.resize(swapchainImageCount);
-    res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &swapchainImageCount, mSwapchainImages.data()); //swapchain sam tworzy swoje image - nie potrzebuję do nich imagecreateinfo
+    //swapchain sam tworzy swoje image - nie ma potrzeby tworzyc imagecreateinfo
+    res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &swapchainImageCount, mSwapchainImages.data());
     assertVkSuccess(res, "failed to get swapchain images");
 
-    mImageViews.resize(mSwapchainImages.size()); //tyle samo imageView co obrazków swapchain
+    mImageViews.resize(mSwapchainImages.size()); //tyle samo imageview co obrazków w swapchain
 
     for(uint32_t i = 0; i < mImageViews.size(); i++)
     {
@@ -426,7 +437,7 @@ void Engine::createCommandBuffer()
     mCommandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     mCommandBufferBeginInfo.pNext = NULL;
     mCommandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    mCommandBufferBeginInfo.pInheritanceInfo = 0; // nie ma znaczenia dla primary command buffer
+    mCommandBufferBeginInfo.pInheritanceInfo = 0;
 }
 
 void Engine::createFence()
@@ -492,7 +503,7 @@ void Engine::createRenderPass()
     attachmentDescriptions[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     attachmentDescriptions[1].finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VkRenderPassCreateInfo renderPassCreateInfo {}; // jeśli będę zapisywać globalnie TO USUNĄC NOWĄ DEKLARACJĘ
+    VkRenderPassCreateInfo renderPassCreateInfo {};
     renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassCreateInfo.pNext = NULL;
     renderPassCreateInfo.flags = 0;
@@ -555,10 +566,8 @@ void Engine::render(uint32_t imageIndex)
     submitInfo.pWaitDstStageMask = NULL;
     submitInfo.commandBufferCount = 1; // jeden bo jednocześnie chcę wysłać 1 cmdbuff
     submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
-    submitInfo.signalSemaphoreCount = 1;
-    // liczba semaforów, która będzie sygnalizowała że command buffer się wykonał
-    submitInfo.pSignalSemaphores = &mQueueSubmitSemaphore;
-    // wskaźnik na ten semafor
+    submitInfo.signalSemaphoreCount = 1; // liczba semaforów, która będzie sygnalizowała że command buffer się wykonał
+    submitInfo.pSignalSemaphores = &mQueueSubmitSemaphore; // wskaźnik na ten semafor
 
     res = vkQueueSubmit(mQueue, 1, &submitInfo, mQueueSubmitFence);
     assertVkSuccess(res, "failed to queue submit");
