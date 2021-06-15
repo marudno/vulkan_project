@@ -35,11 +35,16 @@ public:
     wl_surface* getSurface();
     wl_display* getDisplay();
     void handleEvents();
+    uint32_t WIDTH = 800;
+    static const uint32_t HEIGHT = 600;
 
 private:
     Engine* mEnginePointer = nullptr;
     wl_display* mDisplay = nullptr;
     wl_surface* mSurface = nullptr;
+    struct wls_hm_pool* mPool;
+    void createWindow();
+    wl_buffer* createBuffer();
 };
 #endif // _WIN32
 #endif // WINDOW_H
