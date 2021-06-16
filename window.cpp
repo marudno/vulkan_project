@@ -92,116 +92,20 @@ void Window::handleEvents()
 }
 #elif(__linux__)
 
-#include <sys/mman.h>
-
-namespace global
-{
-    struct wl_compositor* compositor = NULL;
-    struct wl_buffer* buffer;
-    struct wl_shm* shm;
-    void* shm_data;
-
-    static void registry_handler(void*, wl_registry* registry, uint32_t id, const char* interface, uint32_t)
-    {
-        if(strcmp(interface, "wl_compositor") == 0)
-        {
-            compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, id, &wl_compositor_interface, 1));
-        }
-        else if(strcmp(interface, "wl_shm") == 0)
-        {
-            shm = static_cast<wl_shm*>(wl_registry_bind(registry, id, &wl_shm_interface, 1));
-        }
-    }
-
-    static void registry_remover(void*, wl_registry*, uint32_t)
-    {
-        // ???
-    }
-
-    static const wl_registry_listener registry_listeners = {registry_handler, registry_remover};
-
-//    static void create_window()
-//    {
-//        egl_window = wl_egl_window_create(Window::getSurface())
-//    }
-}
-
+#include <xcb/xcb.h>
 
 Window::Window(Engine *enginePointer)
 {
     mEnginePointer = enginePointer;
-    mDisplay = wl_display_connect(NULL);
-    if(mDisplay == NULL)
-    {
-        throw std::runtime_error("failed to connect with wayland server");
-    }
-
-    wl_registry* registry = wl_display_get_registry(mDisplay);
-    wl_registry_add_listener(registry, &global::registry_listeners, NULL);
-    wl_display_dispatch(mDisplay);
-    wl_display_roundtrip(mDisplay);
-
-    if(global::compositor == NULL)
-    {
-        throw std::runtime_error("failed to find a compositor");
-    }
-
-    mSurface = wl_compositor_create_surface(global::compositor);
-    if(mSurface == NULL)
-    {
-        throw std::runtime_error("failed to create a surface");
-    }
 }
 
 Window::~Window()
 {
-    wl_display_disconnect(mDisplay);
-}
 
-wl_surface* Window::getSurface()
-{
-    return mSurface;
-}
-
-wl_display* Window::getDisplay()
-{
-    return mDisplay;
 }
 
 void Window::handleEvents()
 {
 
 }
-
-void Window::createWindow()
-{
-    global::buffer = createBuffer();
-    wl_surface_attach(mSurface, global::buffer, 0, 0);
-    wl_surface_commit(mSurface);
-}
-
-wl_buffer* Window::createBuffer()
-{
-    int stride = WIDTH * 4;
-    int size = stride * HEIGHT;
-    int fd = os_create_anonymous_file(size);
-    struct wl_buffer *buff = nullptr;
-
-    if(fd < 0)
-    {
-        throw std::runtime_error("failed to create buffer file");
-    }
-
-    global::shm_data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if(global::shm_data == MAP_FAILED)
-    {
-        throw std::runtime_error("mmap failed");
-    }
-
-    mPool = wl_shm_create_pool(global::shm, fd, size);
-    buff = wl_shm_pool_create_buffer(mPool, 0, WIDTH, HEIGHT, stride, WL_SHM_FORMAT_XRGB8888);
-
-    return buff;
-}
-
 #endif

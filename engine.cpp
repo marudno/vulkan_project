@@ -284,16 +284,16 @@ void Engine::createSurface()
 
     VkResult res = vkCreateWin32SurfaceKHR(mInstance, &win32SurfaceCreateInfo, NULL, &mSurface);
     assertVkSuccess(res, "failed to create win32 surface");
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-    VkWaylandSurfaceCreateInfoKHR waylandSurfaceCreateInfo {};
-    waylandSurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
-    waylandSurfaceCreateInfo.pNext = NULL;
-    waylandSurfaceCreateInfo.flags = 0;
-    waylandSurfaceCreateInfo.display = mWindow.getDisplay();
-    waylandSurfaceCreateInfo.surface = mWindow.getSurface(); //surface waylandowy, mSurface bedzie vulkanowy
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+    VkXcbSurfaceCreateInfoKHR xcbSurfaceCreateInfo;
+    xcbSurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+    xcbSurfaceCreateInfo.pNext = NULL;
+    xcbSurfaceCreateInfo.flags = 0;
+    xcbSurfaceCreateInfo.connection;
+    xcbSurfaceCreateInfo.window;
 
-    VkResult res = vkCreateWaylandSurfaceKHR(mInstance, &waylandSurfaceCreateInfo, NULL, &mSurface);
-    assertVkSuccess(res, "failed to create wayland surface");
+    VkResult res = vkCreateXcbSurfaceKHR(mInstance, &xcbSurfaceCreateInfo, NULL, &mSurface);
+    assertVkSuccess(res, "failed to create xcb surface");
 #endif
     res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &mSurfaceCapabilities);
     assertVkSuccess(res, "failed to get surface capabilities");

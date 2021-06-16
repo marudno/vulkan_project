@@ -22,6 +22,5 @@ elseif(UNIX)
 
 include_directories(/home/olka/vulkan/1.1.108.0/x86_64/include/vulkan)
 target_link_libraries(${PROJECT_NAME} /home/olka/vulkan/1.1.108.0/x86_64/lib/libvulkan.so)
-target_link_libraries(${PROJECT_NAME} wayland-client)
 
 endif()

@@ -25,26 +25,17 @@ private:
 };
 #elif(__linux__)
 #include <wayland-client.h>
-#define VK_USE_PLATFORM_WAYLAND_KHR 1
+#define VK_USE_PLATFORM_XCB_KHR 1
 #define VK_PLATFORM_SURFACE_EXTENSION_NAME VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
 class Window
 {
 public:
     Window(Engine* enginePointer);
     ~Window();
-    wl_surface* getSurface();
-    wl_display* getDisplay();
     void handleEvents();
-    uint32_t WIDTH = 800;
-    static const uint32_t HEIGHT = 600;
 
 private:
     Engine* mEnginePointer = nullptr;
-    wl_display* mDisplay = nullptr;
-    wl_surface* mSurface = nullptr;
-    struct wls_hm_pool* mPool;
-    void createWindow();
-    wl_buffer* createBuffer();
 };
 #endif // _WIN32
 #endif // WINDOW_H
