@@ -11,7 +11,7 @@ file(GLOB SOURCES
 project(vulkan_project)
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic) #-Wno-zero-as-null-pointer-constant)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 
 if(WIN32)
 

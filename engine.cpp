@@ -289,8 +289,8 @@ void Engine::createSurface()
     xcbSurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
     xcbSurfaceCreateInfo.pNext = NULL;
     xcbSurfaceCreateInfo.flags = 0;
-    xcbSurfaceCreateInfo.connection;
-    xcbSurfaceCreateInfo.window;
+    xcbSurfaceCreateInfo.connection = mWindow.mConnection;
+    xcbSurfaceCreateInfo.window = mWindow.mWindowId;
 
     VkResult res = vkCreateXcbSurfaceKHR(mInstance, &xcbSurfaceCreateInfo, NULL, &mSurface);
     assertVkSuccess(res, "failed to create xcb surface");

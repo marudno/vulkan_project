@@ -15,7 +15,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return global::windowPointer->myWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-Window::Window(Engine* enginePointer)
+Window::Window(Engine* enginePointer, uint16_t windowWidth = 800, uint16_t windowHeight = 600)
 {
     mEnginePointer = enginePointer;
     global::windowPointer = this;
@@ -35,9 +35,7 @@ Window::Window(Engine* enginePointer)
     ReleaseDC(NULL, hdc);
 
     /*------ create window --------*/
-    uint32_t windowWidth = 800;
-    uint32_t windowHeight = 600;
-    mHwnd = CreateWindowEx(0, mClassName, "", WS_POPUP | WS_CLIPCHILDREN, (displayWidth - windowWidth)/2, (displayHeight - windowHeight)/2, 800, 600, NULL, NULL, mHinstance, NULL);
+    mHwnd = CreateWindowEx(0, mClassName, "", WS_POPUP | WS_CLIPCHILDREN, (displayWidth - windowWidth)/2, (displayHeight - windowHeight)/2, windowWidth, windowHeight, NULL, NULL, mHinstance, NULL);
 
     if(mHwnd == NULL) //jeśli createwindow zwróci null - okno nie zostało stworzone
     {
@@ -92,16 +90,34 @@ void Window::handleEvents()
 }
 #elif(__linux__)
 
-#include <xcb/xcb.h>
-
-Window::Window(Engine *enginePointer)
+Window::Window(Engine* enginePointer, uint16_t windowWidth, uint16_t windowHeight)
 {
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint16_t borderWidth = 10;
+
     mEnginePointer = enginePointer;
+    xcb_screen_t* screen;
+
+    mConnection = xcb_connect(NULL, NULL);
+    if(auto error = xcb_connection_has_error((mConnection)); error != 0)
+    {
+        xcb_disconnect(mConnection);
+        throw(std::runtime_error("failed to xcb connection to the X server"));
+    }
+
+    screen = xcb_setup_roots_iterator(xcb_get_setup(mConnection)).data;
+    mWindowId = xcb_generate_id(mConnection);
+
+    xcb_create_window(mConnection, XCB_COPY_FROM_PARENT, mWindowId, screen->root, x, y, windowWidth, windowHeight, borderWidth, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, 0, NULL);
+
+    xcb_map_window(mConnection, mWindowId);
+    xcb_flush(mConnection);
 }
 
 Window::~Window()
 {
-
+    xcb_disconnect(mConnection);
 }
 
 void Window::handleEvents()
