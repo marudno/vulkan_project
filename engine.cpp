@@ -406,13 +406,13 @@ void Engine::createDepthImage()
     depthImageCreateInfo.pNext = NULL;
     depthImageCreateInfo.flags = 0;
     depthImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT; //czy mogę wpisać z ręki dla depth? dla swapchain parametr zależał od surface
     depthImageCreateInfo.extent.width = 800; //jak rozmiar extent w swapchain
     depthImageCreateInfo.extent.height = 600;
-    depthImageCreateInfo.mipLevels;
+    depthImageCreateInfo.mipLevels = 0;
     depthImageCreateInfo.arrayLayers;
     depthImageCreateInfo.samples;
-    depthImageCreateInfo.tiling;
+    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL; //
     depthImageCreateInfo.usage;
     depthImageCreateInfo.sharingMode;
     depthImageCreateInfo.queueFamilyIndexCount = mQueueCount;
