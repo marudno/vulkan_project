@@ -11,16 +11,13 @@ class Engine; //bo w engine include window.h
 class Window
 {
 public:
-    Window(Engine* enginePointer, mWindowWidth, mWindowHeight);
+    Window(Engine* enginePointer);
     ~Window();
     HINSTANCE getHinstance() const; //chcemy by funkcja była const - aby nie zmieniła hinstance
     HWND getHwnd() const;
     LRESULT CALLBACK myWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     void handleEvents();
 private:
-    uint16_t mWindowWidth = 800;
-    uint16_t mWindowHeight = 600;
-
     const char* mClassName = "Vulkan Project";
     HINSTANCE mHinstance = GetModuleHandle(NULL);
     HWND mHwnd = NULL;
