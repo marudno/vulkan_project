@@ -119,7 +119,7 @@ void Engine::createInstance()
     assertVkSuccess(res, "failed to create instance");
 }
 
-uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties *memoryProperties, uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties)
+uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties* memoryProperties, uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties)
 {
     const uint32_t memoryCount = memoryProperties->memoryTypeCount;
 
@@ -128,16 +128,19 @@ uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties *memoryPr
         const uint32_t memoryTypeBits = (1 << memoryIndex); //zapis??????
         const bool isRequiredMemoryType = memoryTypeBitsRequirement & memoryTypeBits;
 
-        const VkMemoryPropertyFlags properties = memoryProperties->memoryTypes[memoryIndex].propertyFlags;
-        const bool hasRequiredProperties = (properties && requiredProperties) == requiredProperties;
-
-        if(isRequiredMemoryType && hasRequiredProperties)
+        if(isRequiredMemoryType)
         {
-            return static_cast<uint32_t>(memoryIndex);
+            const VkMemoryPropertyFlags properties = memoryProperties->memoryTypes[memoryIndex].propertyFlags;
+            const bool hasRequiredProperties = (properties && requiredProperties) == requiredProperties;
+
+            if(isRequiredMemoryType && hasRequiredProperties)
+            {
+                return memoryIndex;
+            }
         }
     }
 
-    throw std::runtime_error("failed to find memory properties");
+    throw std::runtime_error("failed to find memory type");
 }
 
 void Engine::createDevice()
@@ -258,17 +261,23 @@ void Engine::createDevice()
 
     vkGetDeviceQueue(mDevice, mQueueFamilyIndex, 0, &mQueue);
 
-    //TODO: sprawdzić jak flagi zależą od typów karty graficznej
-//    uint32_t memoryTypeBitsRequirement = 1;
-//    std::vector<VkMemoryPropertyFlags> requiredProperties(2);
+    uint32_t requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    uint32_t optimalProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+//    std::vector<VkMemoryPropertyFlags> requiredProperties {VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
+//    std::vector<VkMemoryPropertyFlags> optimalProperties {VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
 
-//    if(mPhysicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
-//    {
-//        memoryTypeBitsRequirement = 7;
-//    }
-
+    VkMemoryRequirements memoryRequirements {};
+//    vkGetImageMemoryRequirements(mDevice, mDepthImage, &memoryRequirements);
 //    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
-//    findMemoryProperties(mDeviceMemoryProperties, memoryTypeBitsRequirement, );
+
+//    try
+//    {
+//        findMemoryProperties(&mDeviceMemoryProperties, memoryRequirements.memoryTypeBits, requiredProperties);
+//    }
+//    catch(...)
+//    {
+//        findMemoryProperties(&mDeviceMemoryProperties, memoryRequirements.memoryTypeBits, optimalProperties);
+//    }
 
 }
 
@@ -396,9 +405,10 @@ void Engine::createDepthImage()
     depthImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     depthImageCreateInfo.pNext = NULL;
     depthImageCreateInfo.flags = 0;
-    depthImageCreateInfo.imageType;
-    depthImageCreateInfo.format;
-    depthImageCreateInfo.extent;
+    depthImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageCreateInfo.extent.width = 800; //jak rozmiar extent w swapchain
+    depthImageCreateInfo.extent.height = 600;
     depthImageCreateInfo.mipLevels;
     depthImageCreateInfo.arrayLayers;
     depthImageCreateInfo.samples;
