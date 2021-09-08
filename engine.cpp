@@ -125,7 +125,7 @@ uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties* memoryPr
 
     for(uint32_t memoryIndex = 0; memoryIndex < memoryCount; memoryIndex++)
     {
-        const uint32_t memoryTypeBits = (1 << memoryIndex); //zapis??????
+        const uint32_t memoryTypeBits = (1 << memoryIndex);
         const bool isRequiredMemoryType = memoryTypeBitsRequirement & memoryTypeBits;
 
         if(isRequiredMemoryType)
@@ -192,7 +192,7 @@ void Engine::createDevice()
     std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyPropertyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &queueFamilyPropertyCount, queueFamilyProperties.data());
 
-    for(mQueueFamilyIndex = 0; mQueueFamilyIndex < queueFamilyProperties.size(); mQueueFamilyIndex++) //lepiej wybrać .size() bo ograniczamy się do wektora, count niekoniecznie prawdziwe(?)
+    for(mQueueFamilyIndex = 0; mQueueFamilyIndex < queueFamilyProperties.size(); mQueueFamilyIndex++)
     {
         if((queueFamilyProperties[mQueueFamilyIndex].queueFlags & VK_QUEUE_GRAPHICS_BIT) == VK_QUEUE_GRAPHICS_BIT)
         {
@@ -260,25 +260,6 @@ void Engine::createDevice()
     assertVkSuccess(res,"failed to create device");
 
     vkGetDeviceQueue(mDevice, mQueueFamilyIndex, 0, &mQueue);
-
-    uint32_t requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    uint32_t optimalProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-//    std::vector<VkMemoryPropertyFlags> requiredProperties {VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
-//    std::vector<VkMemoryPropertyFlags> optimalProperties {VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
-
-    VkMemoryRequirements memoryRequirements {};
-//    vkGetImageMemoryRequirements(mDevice, mDepthImage, &memoryRequirements);
-//    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
-
-//    try
-//    {
-//        findMemoryProperties(&mDeviceMemoryProperties, memoryRequirements.memoryTypeBits, requiredProperties);
-//    }
-//    catch(...)
-//    {
-//        findMemoryProperties(&mDeviceMemoryProperties, memoryRequirements.memoryTypeBits, optimalProperties);
-//    }
-
 }
 
 void Engine::createSurface()
@@ -410,17 +391,26 @@ void Engine::createDepthImage()
     depthImageCreateInfo.extent.width = 800; //jak rozmiar extent w swapchain
     depthImageCreateInfo.extent.height = 600;
     depthImageCreateInfo.mipLevels = 0;
-    depthImageCreateInfo.arrayLayers;
-    depthImageCreateInfo.samples;
+    depthImageCreateInfo.arrayLayers = 1;
+    depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL; //
-    depthImageCreateInfo.usage;
-    depthImageCreateInfo.sharingMode;
+    depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    depthImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     depthImageCreateInfo.queueFamilyIndexCount = mQueueCount;
-    depthImageCreateInfo.pQueueFamilyIndices;
-    depthImageCreateInfo.initialLayout;
+//    depthImageCreateInfo.pQueueFamilyIndices; ignored
+    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &mDepthImage);
     assertVkSuccess(res, "failed to create depth image");
+
+    const auto requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetImageMemoryRequirements(mDevice, mDepthImage, &memoryRequirements);
+
+    findMemoryProperties(&mDeviceMemoryProperties, memoryRequirements.memoryTypeBits, requiredProperties);
 }
 
 void Engine::createCommandBuffer()
