@@ -4,33 +4,56 @@
 #include <cstring>
 
 //m_window musi być zdefiniowane tutaj bo powstanie podczas tworzenia Engine i jest zależne od Engine
-Engine::Engine() : mWindow(this)
+Engine::Engine() : mWindow(this, mWindowWidth, mWindowHeight)
 {
     createInstance();
     createDevice();
     createSurface();
     createSwapchain();
+    createDepthImage();
     createCommandBuffer();
     createFence();
-    createSemaphore();
+    createSemaphores();
     createRenderPass();
-//    createFrameBuffer();
+    createFrameBuffer();
 }
 
 Engine::~Engine()
 {
-//    vkDestroyFramebuffer(mDevice, mFramebuffer, NULL);
+    vkDeviceWaitIdle(mDevice); //czeka aż device skończy wszystko robić, by móc go zniszczyć
+
+    for(auto framebuffer : mFramebuffers)
+    {
+        vkDestroyFramebuffer(mDevice, framebuffer, NULL);
+    }
     vkDestroyRenderPass(mDevice, mRenderPass, NULL);
-    vkDestroySemaphore(mDevice, mQueueSubmitSemaphore, NULL);
-    vkDestroyFence(mDevice, mQueueSubmitFence, NULL);
+    for(auto queueSubmitSemaphore : mQueueSubmitSemaphores)
+    {
+        vkDestroySemaphore(mDevice, queueSubmitSemaphore, NULL);
+    }
+    for(auto acquireSemaphore : mAcquireSemaphores)
+    {
+        vkDestroySemaphore(mDevice, acquireSemaphore, NULL);
+    }
+    for(auto queueSubmitFence : mQueueSubmitFences)
+    {
+        vkDestroyFence(mDevice, queueSubmitFence, NULL);
+    }
     vkDestroyCommandPool(mDevice, mCommandPool, NULL);
-    for(auto imageView : mImageViews) //nie trzeba & bo pod spodem wskaźniki - skopiowanie ich to nadal to samo miejsce w pamięci
+    for(auto depthImageView : mDepthImageViews)
+    {
+        vkDestroyImageView(mDevice, depthImageView, NULL);
+    }
+    for(auto depthImage : mDepthImages)
+    {
+        vkDestroyImage(mDevice, depthImage, NULL);
+    }
+    for(auto imageView : mImageViews)
     {
         vkDestroyImageView(mDevice, imageView, NULL);
     }
     vkDestroySwapchainKHR(mDevice, mSwapchain, NULL);
     vkDestroySurfaceKHR(mInstance, mSurface, NULL);
-    vkDeviceWaitIdle(mDevice); //czeka aż device skończy wszystko robić, by móc go zniszczyć
     vkDestroyDevice(mDevice, NULL);
     vkDestroyInstance(mInstance, NULL);
 }
@@ -119,9 +142,9 @@ void Engine::createInstance()
     assertVkSuccess(res, "failed to create instance");
 }
 
-uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties* memoryProperties, uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties)
+uint32_t Engine::findMemoryProperties(uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties)
 {
-    const uint32_t memoryCount = memoryProperties->memoryTypeCount;
+    const uint32_t memoryCount = mDeviceMemoryProperties.memoryTypeCount;
 
     for(uint32_t memoryIndex = 0; memoryIndex < memoryCount; memoryIndex++)
     {
@@ -130,8 +153,8 @@ uint32_t Engine::findMemoryProperties(VkPhysicalDeviceMemoryProperties* memoryPr
 
         if(isRequiredMemoryType)
         {
-            const VkMemoryPropertyFlags properties = memoryProperties->memoryTypes[memoryIndex].propertyFlags;
-            const bool hasRequiredProperties = (properties && requiredProperties) == requiredProperties;
+            const VkMemoryPropertyFlags properties = mDeviceMemoryProperties.memoryTypes[memoryIndex].propertyFlags;
+            const bool hasRequiredProperties = (properties & requiredProperties) == requiredProperties;
 
             if(isRequiredMemoryType && hasRequiredProperties)
             {
@@ -320,7 +343,7 @@ void Engine::createSwapchain()
     swapchainCreateInfo.imageFormat = mSurfaceFormats[0].format;
     swapchainCreateInfo.imageColorSpace = mSurfaceFormats[0].colorSpace;
     swapchainCreateInfo.imageArrayLayers = 1; //non-stereoscopic 3d app = 1
-    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; //dostęp do obrazka będzie mieć jednocześnie jedna rodzina kolejek
     swapchainCreateInfo.queueFamilyIndexCount = mQueueCount;
     swapchainCreateInfo.pQueueFamilyIndices = VK_NULL_HANDLE; //zero bo ^SHARING_MODE_EXCLUSIVE
@@ -337,8 +360,8 @@ void Engine::createSwapchain()
     }
     else
     {
-        swapchainCreateInfo.imageExtent.width = 800;
-        swapchainCreateInfo.imageExtent.height = 600;
+        swapchainCreateInfo.imageExtent.width = mWindowWidth;
+        swapchainCreateInfo.imageExtent.height = mWindowHeight;
     }
 
     mSwapchainImageFormat = swapchainCreateInfo.imageFormat;
@@ -346,71 +369,100 @@ void Engine::createSwapchain()
     res = vkCreateSwapchainKHR(mDevice, &swapchainCreateInfo, NULL, &mSwapchain);
     assertVkSuccess(res, "failed to create swapchain");
 
-    uint32_t swapchainImageCount = 0;
-
-    res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &swapchainImageCount, NULL);
+    res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &mSwapchainImageCount, NULL);
     assertVkSuccess(res, "failed to get swapchain images");
-    mSwapchainImages.resize(swapchainImageCount);
+    mSwapchainImages.resize(mSwapchainImageCount);
     //swapchain sam tworzy swoje image - nie ma potrzeby tworzyc imagecreateinfo
-    res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &swapchainImageCount, mSwapchainImages.data());
+    res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &mSwapchainImageCount, mSwapchainImages.data());
     assertVkSuccess(res, "failed to get swapchain images");
 
     mImageViews.resize(mSwapchainImages.size()); //tyle samo imageview co obrazków w swapchain
 
     for(uint32_t i = 0; i < mImageViews.size(); i++)
     {
-        mImageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        mImageViewCreateInfo.pNext = NULL;
-        mImageViewCreateInfo.flags = 0;
-        mImageViewCreateInfo.image = mSwapchainImages[i];
-        mImageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        mImageViewCreateInfo.format = mSwapchainImageFormat;
-        mImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        mImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        mImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        mImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        mImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        mImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-        mImageViewCreateInfo.subresourceRange.levelCount = 1;
-        mImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-        mImageViewCreateInfo.subresourceRange.layerCount = 1;
+        VkImageViewCreateInfo imageViewCreateInfo {};
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.pNext = NULL;
+        imageViewCreateInfo.flags = 0;
+        imageViewCreateInfo.image = mSwapchainImages[i];
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.format = mSwapchainImageFormat;
+        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        imageViewCreateInfo.subresourceRange.levelCount = 1;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.layerCount = 1;
 
-        VkResult res = vkCreateImageView(mDevice, &mImageViewCreateInfo, NULL, &mImageViews[i]);
+        VkResult res = vkCreateImageView(mDevice, &imageViewCreateInfo, NULL, &mImageViews[i]);
         assertVkSuccess(res, "failed to create image view");
     }
 }
 
 void Engine::createDepthImage()
 {
+    VkImage depthImage = VK_NULL_HANDLE;
+    VkImageView depthImageView = VK_NULL_HANDLE;
+
+    mDepthImages.resize(mSwapchainImageCount);
+    mDepthImageViews.resize(mSwapchainImageCount);
+
     VkImageCreateInfo depthImageCreateInfo {};
     depthImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     depthImageCreateInfo.pNext = NULL;
     depthImageCreateInfo.flags = 0;
     depthImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT; //czy mogę wpisać z ręki dla depth? dla swapchain parametr zależał od surface
-    depthImageCreateInfo.extent.width = 800; //jak rozmiar extent w swapchain
-    depthImageCreateInfo.extent.height = 600;
-    depthImageCreateInfo.mipLevels = 0;
+    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageCreateInfo.extent.width = mWindowWidth;
+    depthImageCreateInfo.extent.height = mWindowHeight;
+    depthImageCreateInfo.extent.depth = 1;
+    depthImageCreateInfo.mipLevels = 1;
     depthImageCreateInfo.arrayLayers = 1;
     depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL; //
+    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     depthImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    depthImageCreateInfo.queueFamilyIndexCount = mQueueCount;
+    depthImageCreateInfo.queueFamilyIndexCount = 0;
 //    depthImageCreateInfo.pQueueFamilyIndices; ignored
-    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &mDepthImage);
-    assertVkSuccess(res, "failed to create depth image");
+    VkImageViewCreateInfo depthImageViewCreateInfo {};
+    depthImageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    depthImageViewCreateInfo.pNext = NULL;
+    depthImageViewCreateInfo.flags = 0;
+    depthImageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    depthImageViewCreateInfo.format = depthImageCreateInfo.format;
+    depthImageViewCreateInfo.components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+    depthImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    depthImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    depthImageViewCreateInfo.subresourceRange.layerCount = 1;
+    depthImageViewCreateInfo.subresourceRange.levelCount = 1;
 
-    const auto requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for(uint32_t i = 0; i < mSwapchainImageCount; i++)
+    {
+        VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &depthImage);
+        assertVkSuccess(res, "failed to create depth image");
+        mDepthImages[i] = depthImage;
 
-    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
+        depthImageViewCreateInfo.image = depthImage;
 
-    VkMemoryRequirements memoryRequirements;
-    vkGetImageMemoryRequirements(mDevice, mDepthImage, &memoryRequirements);
+        res = vkCreateImageView(mDevice, &depthImageViewCreateInfo, NULL, &depthImageView);
+        assertVkSuccess(res, "failed to create depth image view");
+        mDepthImageViews[i] = depthImageView;
 
-    findMemoryProperties(&mDeviceMemoryProperties, memoryRequirements.memoryTypeBits, requiredProperties);
+        const auto requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
+
+        VkMemoryRequirements memoryRequirements;
+        vkGetImageMemoryRequirements(mDevice, depthImage, &memoryRequirements);
+
+        findMemoryProperties(memoryRequirements.memoryTypeBits, requiredProperties);
+    }
 }
 
 void Engine::createCommandBuffer()
@@ -447,19 +499,42 @@ void Engine::createFence()
     fenceCreateInfo.pNext = NULL;
     fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; //tworzymy zasygnalizowany, żeby wykonało się render za pierwszym razem
 
-    VkResult res = vkCreateFence(mDevice, &fenceCreateInfo, NULL, &mQueueSubmitFence);
-    assertVkSuccess(res, "failed to create fence");
+    VkFence queueSubmitFence = VK_NULL_HANDLE;
+    mQueueSubmitFences.resize(mFramesInFlight);
+
+    for(uint32_t i = 0; i < mFramesInFlight; i++)
+    {
+        VkResult res = vkCreateFence(mDevice, &fenceCreateInfo, NULL, &queueSubmitFence);
+        assertVkSuccess(res, "failed to create fence");
+        mQueueSubmitFences[i] = queueSubmitFence;
+    }
 }
 
-void Engine::createSemaphore()
+void Engine::createSemaphores()
 {
     VkSemaphoreCreateInfo semaphoreCreateInfo {};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     semaphoreCreateInfo.pNext = NULL;
     semaphoreCreateInfo.flags = 0;
 
-    VkResult res = vkCreateSemaphore(mDevice, &semaphoreCreateInfo, NULL, &mQueueSubmitSemaphore);
-    assertVkSuccess(res, "failed to create semaphore");
+    VkSemaphore queueSubmitSemaphore = VK_NULL_HANDLE;
+    mQueueSubmitSemaphores.resize(mFramesInFlight);
+    for(uint32_t i = 0; i < mFramesInFlight; i++)
+    {
+        VkResult res = vkCreateSemaphore(mDevice, &semaphoreCreateInfo, NULL, &queueSubmitSemaphore);
+        assertVkSuccess(res, "failed to create queue submit semaphore");
+        mQueueSubmitSemaphores[i] = queueSubmitSemaphore;
+    }
+
+    VkSemaphore acquireSemaphore = VK_NULL_HANDLE;
+    mAcquireSemaphores.resize(mFramesInFlight);
+    for(uint32_t i = 0; i < mFramesInFlight; i++)
+    {
+        VkResult res = vkCreateSemaphore(mDevice, &semaphoreCreateInfo, NULL, &acquireSemaphore);
+        assertVkSuccess(res, "failed to create aqcuire semaphore");
+        mAcquireSemaphores[i] = acquireSemaphore;
+    }
+
 }
 
 void Engine::createRenderPass()
@@ -486,11 +561,11 @@ void Engine::createRenderPass()
     std::vector<VkAttachmentDescription> attachmentDescriptions(2);
 
     attachmentDescriptions[0].flags = 0; //indeks 0 - colorattachment
-    attachmentDescriptions[0].format = mSwapchainImageFormat;               // !!!!!!!!!!!!!!!!!!!!!!!
+    attachmentDescriptions[0].format = mSwapchainImageFormat;
     attachmentDescriptions[0].samples = VK_SAMPLE_COUNT_1_BIT;
     attachmentDescriptions[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachmentDescriptions[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachmentDescriptions[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     attachmentDescriptions[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     attachmentDescriptions[1].flags = 0; //indeks 1 - depthattachment
@@ -500,11 +575,11 @@ void Engine::createRenderPass()
     attachmentDescriptions[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentDescriptions[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachmentDescriptions[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachmentDescriptions[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    attachmentDescriptions[1].finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachmentDescriptions[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachmentDescriptions[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
     VkRenderPassCreateInfo renderPassCreateInfo {};
-    renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassCreateInfo.pNext = NULL;
     renderPassCreateInfo.flags = 0;
     renderPassCreateInfo.attachmentCount = 2; //color and depth
@@ -520,30 +595,46 @@ void Engine::createRenderPass()
 
 void Engine::createFrameBuffer()
 {
-    VkFramebufferCreateInfo framebufferCreateInfo {};
-    framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebufferCreateInfo.pNext = NULL;
-    framebufferCreateInfo.flags = 0;
-    framebufferCreateInfo.renderPass = mRenderPass;
-    framebufferCreateInfo.attachmentCount;
-    framebufferCreateInfo.pAttachments;
-    framebufferCreateInfo.width;
-    framebufferCreateInfo.height;
-    framebufferCreateInfo.layers;
+    for(uint32_t i = 0; i < mSwapchainImageCount; i++)
+    {
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
 
-    VkResult res = vkCreateFramebuffer(mDevice, &framebufferCreateInfo, NULL, &mFramebuffer);
-    assertVkSuccess(res, "failed to create framebuffer");
+        std::vector<VkImageView> framebufferAttachment(mSwapchainImageCount);
+        framebufferAttachment[0] = mImageViews[i];
+        framebufferAttachment[1] = mDepthImageViews[i];
+
+        VkFramebufferCreateInfo framebufferCreateInfo {};
+        framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferCreateInfo.pNext = NULL;
+        framebufferCreateInfo.flags = 0;
+        framebufferCreateInfo.renderPass = mRenderPass;
+        framebufferCreateInfo.attachmentCount = 2; //color and depth
+        framebufferCreateInfo.pAttachments = framebufferAttachment.data();
+        framebufferCreateInfo.width = mWindowWidth;
+        framebufferCreateInfo.height = mWindowHeight;
+        framebufferCreateInfo.layers = 1;
+        // dla każdego swapchain jeden framebuff i potem podczas renderowania jak sprawdzę na którym obrazku mogę pisać to na podstawie tego wybieram framebuff o danym indeksie
+
+        VkResult res = vkCreateFramebuffer(mDevice, &framebufferCreateInfo, NULL, &framebuffer);
+        assertVkSuccess(res, "failed to create framebuffer");
+        mFramebuffers.push_back(framebuffer);
+    }
 }
 
-void Engine::render(uint32_t imageIndex)
+void Engine::render(uint32_t frameIndex)
 {
-    vkWaitForFences(mDevice, 1, &mQueueSubmitFence, VK_TRUE, 0);
-    //wait for fences zanim kolejny raz będę submitować queue - musi się skończyć poprzednie, potem go zresetujemy
-    VkResult res = vkResetFences(mDevice, 1, &mQueueSubmitFence);
+    vkWaitForFences(mDevice, 1, &mQueueSubmitFences[frameIndex], VK_TRUE, 0);
+    VkResult res = vkResetFences(mDevice, 1, &mQueueSubmitFences[frameIndex]);
     assertVkSuccess(res, "failed to reset fence");
 
+    VkCommandBuffer cmdBuff = mCommandBuffers[frameIndex];
+    uint32_t currentSwapchainImageIndex = 0;
+
+    res = vkAcquireNextImageKHR(mDevice, mSwapchain, UINT64_MAX, mAcquireSemaphores[frameIndex], VK_NULL_HANDLE, &currentSwapchainImageIndex);
+    assertVkSuccess(res, "failed to get current swapchain image index");
+
     /*-------- Begin Command Buffer ----------*/
-    res = vkBeginCommandBuffer(mCommandBuffers[imageIndex], &mCommandBufferBeginInfo); //recording state
+    res = vkBeginCommandBuffer(cmdBuff, &mCommandBufferBeginInfo); //recording state
     assertVkSuccess(res, "failed to begin command buffers");
 
     VkClearColorValue clearColorValue;
@@ -552,34 +643,37 @@ void Engine::render(uint32_t imageIndex)
     clearColorValue.float32[2] = 0.0f;
     clearColorValue.float32[3] = 1.0f;
 
-    vkCmdClearColorImage(mCommandBuffers[imageIndex], mSwapchainImages[imageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearColorValue, 1, &mImageViewCreateInfo.subresourceRange);
+    const VkImageSubresourceRange subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    vkCmdClearColorImage(cmdBuff, mSwapchainImages[currentSwapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearColorValue, 1, &subresourceRange);
 
-    res = vkEndCommandBuffer(mCommandBuffers[imageIndex]);
+    res = vkEndCommandBuffer(cmdBuff);
     assertVkSuccess(res, "failed to end command buffers");
     /*--------- End Command Buffer ----------*/
+
+    VkPipelineStageFlags pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submitInfo {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.pNext = NULL;
-    submitInfo.waitSemaphoreCount = 0;
-    submitInfo.pWaitSemaphores = NULL;
-    submitInfo.pWaitDstStageMask = NULL;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &mAcquireSemaphores[frameIndex];
+    submitInfo.pWaitDstStageMask = &pipelineStageFlags;
     submitInfo.commandBufferCount = 1; // jeden bo jednocześnie chcę wysłać 1 cmdbuff
-    submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
+    submitInfo.pCommandBuffers = &cmdBuff;
     submitInfo.signalSemaphoreCount = 1; // liczba semaforów, która będzie sygnalizowała że command buffer się wykonał
-    submitInfo.pSignalSemaphores = &mQueueSubmitSemaphore; // wskaźnik na ten semafor
+    submitInfo.pSignalSemaphores = &mQueueSubmitSemaphores[frameIndex]; // wskaźnik na ten semafor
 
-    res = vkQueueSubmit(mQueue, 1, &submitInfo, mQueueSubmitFence);
+    res = vkQueueSubmit(mQueue, 1, &submitInfo, mQueueSubmitFences[frameIndex]);
     assertVkSuccess(res, "failed to queue submit");
 
     VkPresentInfoKHR presentInfo {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.pNext = NULL;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &mQueueSubmitSemaphore;
+    presentInfo.pWaitSemaphores = &mQueueSubmitSemaphores[frameIndex];
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &mSwapchain;
-    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pImageIndices = &currentSwapchainImageIndex;
     presentInfo.pResults = NULL;
 
     res = vkQueuePresentKHR(mQueue, &presentInfo);

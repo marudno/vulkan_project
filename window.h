@@ -5,15 +5,16 @@ class Engine; //bo w engine include window.h
 
 #if(_WIN32)
 #include <windows.h>
+#include <stdint.h>
 #define VK_USE_PLATFORM_WIN32_KHR 1
 #define VK_PLATFORM_SURFACE_EXTENSION_NAME VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 
 class Window
 {
 public:
-    Window(Engine* enginePointer);
+    Window(Engine* enginePointer, uint16_t windowWidth, uint16_t windowHeight);
     ~Window();
-    HINSTANCE getHinstance() const; //chcemy by funkcja była const - aby nie zmieniła hinstance
+    HINSTANCE getHinstance() const;
     HWND getHwnd() const;
     LRESULT CALLBACK myWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     void handleEvents();
@@ -30,7 +31,7 @@ private:
 class Window
 {
 public:
-    Window(Engine* enginePointer, uint16_t width = 800, uint16_t height = 600);
+    Window(Engine* enginePointer, uint16_t width, uint16_t height);
     ~Window();
 
     xcb_connection_t* mConnection;

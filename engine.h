@@ -14,6 +14,12 @@ public:
     void stop();
 
 private:
+    uint32_t mFramesInFlight = 2; //ile będzie jednocześnie command bufferów
+
+    uint16_t mWindowWidth = 800;
+    uint16_t mWindowHeight = 600;
+    bool mRun = true;
+
     void assertVkSuccess(VkResult res, std::string_view);
     void createInstance();
     void createDevice();
@@ -22,13 +28,12 @@ private:
     void createDepthImage();
     void createCommandBuffer();
     void createFence();
-    void createSemaphore();
+    void createSemaphores();
     void createRenderPass();
     void createFrameBuffer();
     void render(uint32_t i);
 
-    bool mRun = true;
-    uint32_t findMemoryProperties(VkPhysicalDeviceMemoryProperties* memoryProperties, uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties);
+    uint32_t findMemoryProperties(uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties);
 
     /*------- instance ------------*/
     VkInstance mInstance = VK_NULL_HANDLE;
@@ -52,31 +57,32 @@ private:
     std::vector<VkSurfaceFormatKHR> mSurfaceFormats;
 
     /*- swapchain and image views -*/
+    uint32_t mSwapchainImageCount = 0;
     VkSwapchainKHR mSwapchain = VK_NULL_HANDLE;
     std::vector<VkImage> mSwapchainImages;
     VkFormat mSwapchainImageFormat;
-    VkImageViewCreateInfo mImageViewCreateInfo {};
     std::vector<VkImageView> mImageViews;
 
     /*------- depth image/view -----*/
-    VkImage mDepthImage = VK_NULL_HANDLE;
+    std::vector<VkImage> mDepthImages;
+    std::vector<VkImageView> mDepthImageViews;
 
     /*------- command buffer -------*/
     VkCommandPool mCommandPool = VK_NULL_HANDLE;
-    uint32_t mFramesInFlight = 2; //ile będzie jednocześnie command bufferów
     std::vector<VkCommandBuffer> mCommandBuffers = std::vector<VkCommandBuffer>(2);
     VkCommandBufferBeginInfo mCommandBufferBeginInfo = {};
 
     /*--- fences and semaphores ----*/
-    VkFence mQueueSubmitFence = VK_NULL_HANDLE;
-    VkSemaphore mQueueSubmitSemaphore = VK_NULL_HANDLE;
+    std::vector<VkFence> mQueueSubmitFences;
+    std::vector<VkSemaphore> mQueueSubmitSemaphores;
+    std::vector<VkSemaphore> mAcquireSemaphores;
 
     /*--------- renderpass ---------*/
     VkRenderPass mRenderPass = VK_NULL_HANDLE;
     VkSubpassDescription mSubpass {};
 
     /*-------- framebuffer ---------*/
-    VkFramebuffer mFramebuffer = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer> mFramebuffers;
 };
 
 #endif // ENGINE_H

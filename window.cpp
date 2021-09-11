@@ -15,7 +15,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return global::windowPointer->myWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-Window::Window(Engine* enginePointer)
+Window::Window(Engine* enginePointer, uint16_t windowWidth, uint16_t windowHeight)
 {
     mEnginePointer = enginePointer;
     global::windowPointer = this;
@@ -35,8 +35,6 @@ Window::Window(Engine* enginePointer)
     ReleaseDC(NULL, hdc);
 
     /*------ create window --------*/
-    uint16_t windowWidth = 800;
-    uint16_t windowHeight = 600;
     mHwnd = CreateWindowEx(0, mClassName, "", WS_POPUP | WS_CLIPCHILDREN, (displayWidth - windowWidth)/2, (displayHeight - windowHeight)/2, windowWidth, windowHeight, NULL, NULL, mHinstance, NULL);
 
     if(mHwnd == NULL) //jeśli createwindow zwróci null - okno nie zostało stworzone
