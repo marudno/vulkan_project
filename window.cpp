@@ -6,7 +6,7 @@
 #if(_WIN32)
 namespace global
 {
-    static Window* windowPointer = nullptr; // static - ma dokładnie jedną inicjalizację i istnieje przez cały czas trwania programu
+    static Window* windowPointer = nullptr;
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -30,8 +30,8 @@ Window::Window(Engine* enginePointer, uint16_t windowWidth, uint16_t windowHeigh
 
     /*-------- resolution ---------*/
     HDC hdc = GetDC(NULL); // get screen DC
-    uint32_t displayWidth = GetDeviceCaps(hdc, HORZRES); // wide
-    uint32_t displayHeight = GetDeviceCaps(hdc, VERTRES); // high
+    uint32_t displayWidth = GetDeviceCaps(hdc, HORZRES);
+    uint32_t displayHeight = GetDeviceCaps(hdc, VERTRES);
     ReleaseDC(NULL, hdc);
 
     /*------ create window --------*/

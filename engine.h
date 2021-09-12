@@ -1,16 +1,18 @@
 #ifndef ENGINE_H
 #define ENGINE_H
-#include "window.h" //jeśli zaincludowane w pluku .h to nie ma potrzeby w pliku .cpp
+#include "window.h"
 #include <vulkan.h>
 #include <string_view>
 #include <vector>
+
+//może pogrupować dane w struktury?
 
 class Engine
 {
 public:
     Engine();
     ~Engine();
-    void run(); //aplikacja chodzi w pętli, która będzie się znajdować w tej funkcji
+    void run();
     void stop();
 
 private:
@@ -51,7 +53,7 @@ private:
     VkQueue mQueue = VK_NULL_HANDLE;
 
     /*---- surface and window -----*/
-    VkSurfaceKHR mSurface; //czy powinno być nullhadle?
+    VkSurfaceKHR mSurface = VK_NULL_HANDLE;
     VkSurfaceCapabilitiesKHR mSurfaceCapabilities = {};
     Window mWindow;
     std::vector<VkSurfaceFormatKHR> mSurfaceFormats;
@@ -66,6 +68,7 @@ private:
     /*------- depth image/view -----*/
     std::vector<VkImage> mDepthImages;
     std::vector<VkImageView> mDepthImageViews;
+    std::vector<VkDeviceMemory> mDeviceMemory {};
 
     /*------- command buffer -------*/
     VkCommandPool mCommandPool = VK_NULL_HANDLE;

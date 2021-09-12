@@ -3,7 +3,6 @@
 #include <vector>
 #include <cstring>
 
-//m_window musi być zdefiniowane tutaj bo powstanie podczas tworzenia Engine i jest zależne od Engine
 Engine::Engine() : mWindow(this, mWindowWidth, mWindowHeight)
 {
     createInstance();
@@ -20,7 +19,7 @@ Engine::Engine() : mWindow(this, mWindowWidth, mWindowHeight)
 
 Engine::~Engine()
 {
-    vkDeviceWaitIdle(mDevice); //czeka aż device skończy wszystko robić, by móc go zniszczyć
+    vkDeviceWaitIdle(mDevice);
 
     for(auto framebuffer : mFramebuffers)
     {
@@ -40,6 +39,10 @@ Engine::~Engine()
         vkDestroyFence(mDevice, queueSubmitFence, NULL);
     }
     vkDestroyCommandPool(mDevice, mCommandPool, NULL);
+    for(auto deviceMemory : mDeviceMemory)
+    {
+        vkFreeMemory(mDevice, deviceMemory, NULL);
+    }
     for(auto depthImageView : mDepthImageViews)
     {
         vkDestroyImageView(mDevice, depthImageView, NULL);
@@ -315,7 +318,7 @@ void Engine::createSurface()
     res = vkGetPhysicalDeviceSurfaceFormatsKHR(mPhysicalDevice, mSurface, &surfaceFormatCount, NULL);
     assertVkSuccess(res, "failed to get surface formats");
 
-    mSurfaceFormats.resize(surfaceFormatCount); //bo zapamiętujemy surface_formats do swapchaina
+    mSurfaceFormats.resize(surfaceFormatCount);
 
     res = vkGetPhysicalDeviceSurfaceFormatsKHR(mPhysicalDevice, mSurface, &surfaceFormatCount, mSurfaceFormats.data());
     assertVkSuccess(res, "failed to get surface formats");
@@ -372,11 +375,10 @@ void Engine::createSwapchain()
     res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &mSwapchainImageCount, NULL);
     assertVkSuccess(res, "failed to get swapchain images");
     mSwapchainImages.resize(mSwapchainImageCount);
-    //swapchain sam tworzy swoje image - nie ma potrzeby tworzyc imagecreateinfo
     res = vkGetSwapchainImagesKHR(mDevice, mSwapchain, &mSwapchainImageCount, mSwapchainImages.data());
     assertVkSuccess(res, "failed to get swapchain images");
 
-    mImageViews.resize(mSwapchainImages.size()); //tyle samo imageview co obrazków w swapchain
+    mImageViews.resize(mSwapchainImages.size());
 
     for(uint32_t i = 0; i < mImageViews.size(); i++)
     {
@@ -461,7 +463,18 @@ void Engine::createDepthImage()
         VkMemoryRequirements memoryRequirements;
         vkGetImageMemoryRequirements(mDevice, depthImage, &memoryRequirements);
 
-        findMemoryProperties(memoryRequirements.memoryTypeBits, requiredProperties);
+        uint32_t memoryIndex = findMemoryProperties(memoryRequirements.memoryTypeBits, requiredProperties);
+
+        VkMemoryAllocateInfo allocateCreateInfo {};
+        allocateCreateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocateCreateInfo.pNext = NULL;
+        allocateCreateInfo.allocationSize = memoryRequirements.size;
+        allocateCreateInfo.memoryTypeIndex = memoryIndex;
+
+        mDeviceMemory.resize(mSwapchainImageCount);
+
+        vkAllocateMemory(mDevice, &allocateCreateInfo, NULL, &mDeviceMemory[i]);
+        vkBindImageMemory(mDevice, depthImage, mDeviceMemory[i], 0);
     }
 }
 
@@ -534,7 +547,6 @@ void Engine::createSemaphores()
         assertVkSuccess(res, "failed to create aqcuire semaphore");
         mAcquireSemaphores[i] = acquireSemaphore;
     }
-
 }
 
 void Engine::createRenderPass()

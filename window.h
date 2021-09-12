@@ -1,7 +1,7 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
-class Engine; //bo w engine include window.h
+class Engine;
 
 #if(_WIN32)
 #include <windows.h>
