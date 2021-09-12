@@ -452,10 +452,6 @@ void Engine::createDepthImage()
 
         depthImageViewCreateInfo.image = depthImage;
 
-        res = vkCreateImageView(mDevice, &depthImageViewCreateInfo, NULL, &depthImageView);
-        assertVkSuccess(res, "failed to create depth image view");
-        mDepthImageViews[i] = depthImageView;
-
         const auto requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
         vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
@@ -475,6 +471,10 @@ void Engine::createDepthImage()
 
         vkAllocateMemory(mDevice, &allocateCreateInfo, NULL, &mDeviceMemory[i]);
         vkBindImageMemory(mDevice, depthImage, mDeviceMemory[i], 0);
+
+        res = vkCreateImageView(mDevice, &depthImageViewCreateInfo, NULL, &depthImageView);
+        assertVkSuccess(res, "failed to create depth image view");
+        mDepthImageViews[i] = depthImageView;
     }
 }
 
@@ -655,8 +655,29 @@ void Engine::render(uint32_t frameIndex)
     clearColorValue.float32[2] = 0.0f;
     clearColorValue.float32[3] = 1.0f;
 
-    const VkImageSubresourceRange subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdClearColorImage(cmdBuff, mSwapchainImages[currentSwapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearColorValue, 1, &subresourceRange);
+    VkClearDepthStencilValue clearDepthValue;
+    clearDepthValue.depth = 1.0f;
+    //clearDepthValue.stencil; ignored - no stencil
+
+    VkClearValue clearValues;
+    clearValues.color = clearColorValue;
+    clearValues.depthStencil = clearDepthValue;
+
+    VkRenderPassBeginInfo renderPassBeginInfo {};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.pNext = NULL;
+    renderPassBeginInfo.renderPass = mRenderPass;
+    renderPassBeginInfo.framebuffer = mFramebuffers[currentSwapchainImageIndex];
+    renderPassBeginInfo.renderArea.offset = {0,0};
+    renderPassBeginInfo.renderArea.extent = {mWindowWidth, mWindowHeight};
+    renderPassBeginInfo.clearValueCount = 2;
+    renderPassBeginInfo.pClearValues = &clearValues;
+
+    /*----------- Begin RenderPass ---------*/
+    vkCmdBeginRenderPass(cmdBuff, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    /*------------ End RenderPass ----------*/
+    vkCmdEndRenderPass(cmdBuff);
 
     res = vkEndCommandBuffer(cmdBuff);
     assertVkSuccess(res, "failed to end command buffers");
