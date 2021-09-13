@@ -33,6 +33,7 @@ private:
     void createSemaphores();
     void createRenderPass();
     void createFrameBuffer();
+    void createPipeline();
     void render(uint32_t i);
 
     uint32_t findMemoryProperties(uint32_t memoryTypeBitsRequirement, VkMemoryPropertyFlags requiredProperties);
@@ -86,6 +87,10 @@ private:
 
     /*-------- framebuffer ---------*/
     std::vector<VkFramebuffer> mFramebuffers;
+
+    /*--------- pipeline -----------*/
+    VkPipeline mPipeline = VK_NULL_HANDLE;
+
 };
 
 #endif // ENGINE_H

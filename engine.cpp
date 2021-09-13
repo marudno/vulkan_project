@@ -1,4 +1,6 @@
 #include "engine.h"
+#include <fstream>
+#include <array>
 #include <iostream>
 #include <vector>
 #include <cstring>
@@ -633,6 +635,133 @@ void Engine::createFrameBuffer()
     }
 }
 
+void Engine::createPipeline()
+{
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo {};
+    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutCreateInfo.pNext = NULL;
+    pipelineLayoutCreateInfo.flags = 0;
+    pipelineLayoutCreateInfo.setLayoutCount = 0;
+    pipelineLayoutCreateInfo.pSetLayouts = VK_NULL_HANDLE; //pewnie kiedyś będę chciała to ustawić
+    pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
+    pipelineLayoutCreateInfo.pPushConstantRanges = VK_NULL_HANDLE;
+
+    VkPipelineLayout pipelineLayout {};
+    VkResult res = vkCreatePipelineLayout(mDevice, &pipelineLayoutCreateInfo, NULL, &pipelineLayout);
+    assertVkSuccess(res, "failed to create pipeline layout");
+
+    std::vector<VkShaderModuleCreateInfo> shaderModuleCreateInfos(2);
+
+    /*----------- open vertex shader --------*/
+    std::ifstream vsfile("shaders/vs.spv", std::ios::ate);
+    const size_t vsSize = vsfile.tellg();
+    vsfile.seekg(0);
+    std::vector<uint32_t> vsCode((vsSize - 1) / 4 + 1);   // PRZEANALIZOWAĆ zaokrąglenie w górę
+    vsfile.read(reinterpret_cast<char*>(vsCode.data()), vsSize);
+
+    shaderModuleCreateInfos[0].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderModuleCreateInfos[0].pNext = NULL;
+    shaderModuleCreateInfos[0].flags = 0;
+    shaderModuleCreateInfos[0].codeSize = vsSize;
+    shaderModuleCreateInfos[0].pCode = vsCode.data();
+    VkShaderModule vertexShaderModule;
+    res = vkCreateShaderModule(mDevice, &shaderModuleCreateInfos[0], NULL, &vertexShaderModule);
+    assertVkSuccess(res, "failed to create vs module");
+
+    VkPipelineShaderStageCreateInfo vertexShaderCreateInfo {};
+    vertexShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexShaderCreateInfo.pNext = NULL;
+    vertexShaderCreateInfo.flags = 0;
+    vertexShaderCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexShaderCreateInfo.module = vertexShaderModule;
+    vertexShaderCreateInfo.pName = "main";
+    vertexShaderCreateInfo.pSpecializationInfo = NULL;
+
+    /*----------- open fragment shader --------*/
+    std::ifstream fsfile("shaders/fs.spv", std::ios::ate);
+    const size_t fsSize = fsfile.tellg();
+    fsfile.seekg(0);
+    std::vector<uint32_t> fsCode((fsSize - 1) / 4 + 1);
+    fsfile.read(reinterpret_cast<char*>(fsCode.data()), fsSize);
+
+    shaderModuleCreateInfos[1].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderModuleCreateInfos[1].pNext = NULL;
+    shaderModuleCreateInfos[1].flags = 0;
+    shaderModuleCreateInfos[1].codeSize = fsSize;
+    shaderModuleCreateInfos[1].pCode = fsCode.data();
+    VkShaderModule fragmentShaderModule;
+    res = vkCreateShaderModule(mDevice, &shaderModuleCreateInfos[0], NULL, &fragmentShaderModule);
+    assertVkSuccess(res, "failed to create fs module");
+
+    VkPipelineShaderStageCreateInfo fragmentShaderCreateInfo {}; //fragment shader create info
+    fragmentShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentShaderCreateInfo.pNext = NULL;
+    fragmentShaderCreateInfo.flags = 0;
+    fragmentShaderCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentShaderCreateInfo.module = fragmentShaderModule;
+    fragmentShaderCreateInfo.pName = "main";
+    fragmentShaderCreateInfo.pSpecializationInfo = NULL;
+
+    struct alignas(16) Vertex
+    {
+        std::array<float, 3> position;
+        float pad;
+        std::array<float, 4> color;
+    };
+
+    VkVertexInputBindingDescription bindingDescription {};
+    bindingDescription.binding = 0; //indeks vertexbuff z którego będą pobierane atrybuty
+    bindingDescription.stride = sizeof(Vertex);
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    //binding = 1, przykładowo vertex input instance - gdy do rysowania kilka elementów
+
+    std::vector<VkVertexInputAttributeDescription> vertexAttributesDescriptions;
+    vertexAttributesDescriptions.resize(2);
+
+    vertexAttributesDescriptions[0].location = 0;  //vertex position
+    vertexAttributesDescriptions[0].binding = 0;
+    vertexAttributesDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+    vertexAttributesDescriptions[0].offset = 0;
+
+    vertexAttributesDescriptions[1].location = 1;  //vertex color
+    vertexAttributesDescriptions[1].binding = 0;
+    vertexAttributesDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    vertexAttributesDescriptions[1].offset = 16; //odległość Vertex::color od początku struktury czyli rozmiar Vertex::position
+
+    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo;
+    vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputCreateInfo.pNext = NULL;
+    vertexInputCreateInfo.flags = 0;
+    vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+    vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputCreateInfo.vertexAttributeDescriptionCount = 2; //vertex color and position
+    vertexInputCreateInfo.pVertexAttributeDescriptions = vertexAttributesDescriptions.data();
+
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo;
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.pNext = NULL;
+    pipelineCreateInfo.flags = 0;
+    pipelineCreateInfo.stageCount;
+    pipelineCreateInfo.pStages;
+    pipelineCreateInfo.pVertexInputState = &vertexInputCreateInfo;
+    pipelineCreateInfo.pInputAssemblyState;
+    pipelineCreateInfo.pTessellationState;
+    pipelineCreateInfo.pViewportState;
+    pipelineCreateInfo.pRasterizationState;
+    pipelineCreateInfo.pMultisampleState;
+    pipelineCreateInfo.pDepthStencilState;
+    pipelineCreateInfo.pColorBlendState;
+    pipelineCreateInfo.pDynamicState;
+    pipelineCreateInfo.layout = pipelineLayout;
+    pipelineCreateInfo.renderPass = mRenderPass;
+    pipelineCreateInfo.subpass = 0;
+    pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineCreateInfo.basePipelineIndex = -1;
+
+    res = vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &mPipeline);
+    assertVkSuccess(res, "failed to create pipeline");
+}
+
 void Engine::render(uint32_t frameIndex)
 {
     vkWaitForFences(mDevice, 1, &mQueueSubmitFences[frameIndex], VK_TRUE, 0);
@@ -650,10 +779,10 @@ void Engine::render(uint32_t frameIndex)
     assertVkSuccess(res, "failed to begin command buffers");
 
     VkClearColorValue clearColorValue;
-    clearColorValue.float32[0] = 1.0f;
+    clearColorValue.float32[0] = 0.0f;
     clearColorValue.float32[1] = 0.0f;
     clearColorValue.float32[2] = 0.0f;
-    clearColorValue.float32[3] = 1.0f;
+    clearColorValue.float32[3] = 0.0f;
 
     VkClearDepthStencilValue clearDepthValue;
     clearDepthValue.depth = 1.0f;
@@ -673,10 +802,10 @@ void Engine::render(uint32_t frameIndex)
     renderPassBeginInfo.clearValueCount = 2;
     renderPassBeginInfo.pClearValues = &clearValues;
 
-    /*----------- Begin RenderPass ---------*/
+    /*----------- Begin RenderPass ----------*/
     vkCmdBeginRenderPass(cmdBuff, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    /*------------ End RenderPass ----------*/
+    /*------------ End RenderPass -----------*/
     vkCmdEndRenderPass(cmdBuff);
 
     res = vkEndCommandBuffer(cmdBuff);
