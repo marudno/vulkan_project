@@ -65,6 +65,8 @@ private:
     std::vector<VkImage> mSwapchainImages;
     VkFormat mSwapchainImageFormat;
     std::vector<VkImageView> mImageViews;
+    uint32_t mSwapchainWidth = 0;
+    uint32_t mSwapchainHeight = 0;
 
     /*------- depth image/view -----*/
     std::vector<VkImage> mDepthImages;
@@ -90,6 +92,7 @@ private:
 
     /*--------- pipeline -----------*/
     VkPipeline mPipeline = VK_NULL_HANDLE;
+    VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;
 
 };
 

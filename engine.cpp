@@ -17,12 +17,15 @@ Engine::Engine() : mWindow(this, mWindowWidth, mWindowHeight)
     createSemaphores();
     createRenderPass();
     createFrameBuffer();
+    createPipeline();
 }
 
 Engine::~Engine()
 {
     vkDeviceWaitIdle(mDevice);
 
+    vkDestroyPipeline(mDevice, mPipeline, NULL);
+    vkDestroyPipelineLayout(mDevice, mPipelineLayout, NULL);
     for(auto framebuffer : mFramebuffers)
     {
         vkDestroyFramebuffer(mDevice, framebuffer, NULL);
@@ -76,7 +79,7 @@ void Engine::createInstance()
 {
     const std::vector<const char*> requiredLayerNames =
     {
-        "VK_LAYER_LUNARG_standard_validation"
+        "VK_LAYER_KHRONOS_validation"
     };
 
     const std::vector<const char*> requiredExtensionNames =
@@ -133,11 +136,20 @@ void Engine::createInstance()
         }
     }
 
+    VkApplicationInfo appInfo{};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pNext = NULL;
+    appInfo.pApplicationName = "App Name";
+    appInfo.applicationVersion = VK_MAKE_VERSION(0,1,0);
+    appInfo.pEngineName = "Engine Name";
+    appInfo.engineVersion = VK_MAKE_VERSION(0,1,0);
+    appInfo.apiVersion = VK_API_VERSION_1_3;
+
     VkInstanceCreateInfo instanceCreateInfo{};
     instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceCreateInfo.pNext = NULL;
     instanceCreateInfo.flags = 0;
-    instanceCreateInfo.pApplicationInfo = NULL;
+    instanceCreateInfo.pApplicationInfo = &appInfo;
     instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(requiredLayerNames.size());
     instanceCreateInfo.ppEnabledLayerNames = requiredLayerNames.data();
     instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensionNames.size());
@@ -333,10 +345,10 @@ void Engine::createSurface()
     }
 }
 
-void Engine::createSwapchain()
+void Engine::createSwapchain() // tworzę zqwsze kiedy zmieniają sięjego parametry
 {
     VkSurfaceCapabilitiesKHR surfaceCapabilities {};
-    VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &surfaceCapabilities);
+    VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &surfaceCapabilities); //pozbyc sie tego ew. surface ze swapchainem
     assertVkSuccess(res, "failed to get surface capabilities");
 
     VkSwapchainCreateInfoKHR swapchainCreateInfo {};
@@ -355,7 +367,7 @@ void Engine::createSwapchain()
     swapchainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR; //brak transformacji
     //TODO: sprobowac inna alphe
     swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // v-sync
+    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // v-sync, aktualizuję cały bufor i dopiero go wyświetlam
     swapchainCreateInfo.clipped = VK_TRUE;
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
@@ -368,6 +380,8 @@ void Engine::createSwapchain()
         swapchainCreateInfo.imageExtent.width = mWindowWidth;
         swapchainCreateInfo.imageExtent.height = mWindowHeight;
     }
+    mSwapchainWidth = swapchainCreateInfo.imageExtent.width;
+    mSwapchainHeight = swapchainCreateInfo.imageExtent.height;
 
     mSwapchainImageFormat = swapchainCreateInfo.imageFormat;
 
@@ -446,17 +460,19 @@ void Engine::createDepthImage()
     depthImageViewCreateInfo.subresourceRange.layerCount = 1;
     depthImageViewCreateInfo.subresourceRange.levelCount = 1;
 
+    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties); //TODO przenieść to w mądrzejsze miejsce
+
+    mDeviceMemory.resize(mSwapchainImageCount);
+
     for(uint32_t i = 0; i < mSwapchainImageCount; i++)
     {
-        VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &depthImage);
+        VkResult res = vkCreateImage(mDevice, &depthImageCreateInfo, NULL, &depthImage); // każdy image musi mieć podpiętą pamięć zaalokowaną na karcie -> findMemoryProperties
         assertVkSuccess(res, "failed to create depth image");
         mDepthImages[i] = depthImage;
 
         depthImageViewCreateInfo.image = depthImage;
 
         const auto requiredProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &mDeviceMemoryProperties);
 
         VkMemoryRequirements memoryRequirements;
         vkGetImageMemoryRequirements(mDevice, depthImage, &memoryRequirements);
@@ -469,8 +485,6 @@ void Engine::createDepthImage()
         allocateCreateInfo.allocationSize = memoryRequirements.size;
         allocateCreateInfo.memoryTypeIndex = memoryIndex;
 
-        mDeviceMemory.resize(mSwapchainImageCount);
-
         vkAllocateMemory(mDevice, &allocateCreateInfo, NULL, &mDeviceMemory[i]);
         vkBindImageMemory(mDevice, depthImage, mDeviceMemory[i], 0);
 
@@ -480,7 +494,7 @@ void Engine::createDepthImage()
     }
 }
 
-void Engine::createCommandBuffer()
+void Engine::createCommandBuffer() // trzeba się synchronizować, żeby procesor nie zaczął nagrywać komend zamin nie skończy ich wykonywać
 {
     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
     commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -607,14 +621,14 @@ void Engine::createRenderPass()
     assertVkSuccess(res, "failed to create renderpass");
 }
 
-void Engine::createFrameBuffer()
+void Engine::createFrameBuffer() //dla róznych obrazków rózny frame buffer
 {
     for(uint32_t i = 0; i < mSwapchainImageCount; i++)
     {
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
 
         std::vector<VkImageView> framebufferAttachment(mSwapchainImageCount);
-        framebufferAttachment[0] = mImageViews[i];
+        framebufferAttachment[0] = mImageViews[i]; //już konkretne, w renderpass tylko szablon
         framebufferAttachment[1] = mDepthImageViews[i];
 
         VkFramebufferCreateInfo framebufferCreateInfo {};
@@ -643,23 +657,31 @@ void Engine::createPipeline()
     pipelineLayoutCreateInfo.flags = 0;
     pipelineLayoutCreateInfo.setLayoutCount = 0;
     pipelineLayoutCreateInfo.pSetLayouts = VK_NULL_HANDLE; //pewnie kiedyś będę chciała to ustawić
-    pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
+    pipelineLayoutCreateInfo.pushConstantRangeCount = 0; // 256bajtów do szybciej aktualizacji
     pipelineLayoutCreateInfo.pPushConstantRanges = VK_NULL_HANDLE;
 
-    VkPipelineLayout pipelineLayout {};
-    VkResult res = vkCreatePipelineLayout(mDevice, &pipelineLayoutCreateInfo, NULL, &pipelineLayout);
+    VkResult res = vkCreatePipelineLayout(mDevice, &pipelineLayoutCreateInfo, NULL, &mPipelineLayout);
     assertVkSuccess(res, "failed to create pipeline layout");
 
     std::vector<VkShaderModuleCreateInfo> shaderModuleCreateInfos(2);
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStageCreateInfos(2);
 
     /*----------- open vertex shader --------*/
-    std::ifstream vsfile("shaders/vs.spv", std::ios::ate);
+    std::ifstream vsfile("shaders/vs.spv", std::ios::ate | std::ios::binary);
+    if(!vsfile)
+    {
+        throw std::runtime_error("shader file does not exist");
+    }
     const size_t vsSize = vsfile.tellg();
+    if (vsSize == 0)
+    {
+        throw std::runtime_error("shader file empty");
+    }
     vsfile.seekg(0);
-    std::vector<uint32_t> vsCode((vsSize - 1) / 4 + 1);   // PRZEANALIZOWAĆ zaokrąglenie w górę
+    std::vector<uint32_t> vsCode((vsSize - 1) / 4 + 1);
     vsfile.read(reinterpret_cast<char*>(vsCode.data()), vsSize);
 
-    shaderModuleCreateInfos[0].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderModuleCreateInfos[0].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO; //reprezentuje skompilowany shader
     shaderModuleCreateInfos[0].pNext = NULL;
     shaderModuleCreateInfos[0].flags = 0;
     shaderModuleCreateInfos[0].codeSize = vsSize;
@@ -668,18 +690,25 @@ void Engine::createPipeline()
     res = vkCreateShaderModule(mDevice, &shaderModuleCreateInfos[0], NULL, &vertexShaderModule);
     assertVkSuccess(res, "failed to create vs module");
 
-    VkPipelineShaderStageCreateInfo vertexShaderCreateInfo {};
-    vertexShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertexShaderCreateInfo.pNext = NULL;
-    vertexShaderCreateInfo.flags = 0;
-    vertexShaderCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertexShaderCreateInfo.module = vertexShaderModule;
-    vertexShaderCreateInfo.pName = "main";
-    vertexShaderCreateInfo.pSpecializationInfo = NULL;
+    shaderStageCreateInfos[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; //reprezentuje cały etap
+    shaderStageCreateInfos[0].pNext = NULL;
+    shaderStageCreateInfos[0].flags = 0;
+    shaderStageCreateInfos[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStageCreateInfos[0].module = vertexShaderModule;
+    shaderStageCreateInfos[0].pName = "main";
+    shaderStageCreateInfos[0].pSpecializationInfo = NULL;
 
     /*----------- open fragment shader --------*/
-    std::ifstream fsfile("shaders/fs.spv", std::ios::ate);
+    std::ifstream fsfile("shaders/fs.spv", std::ios::ate | std::ios::binary);
+    if(!fsfile)
+    {
+        throw std::runtime_error("shader file does not exist");
+    }
     const size_t fsSize = fsfile.tellg();
+    if (fsSize == 0)
+    {
+        throw std::runtime_error("shader file empty");
+    }
     fsfile.seekg(0);
     std::vector<uint32_t> fsCode((fsSize - 1) / 4 + 1);
     fsfile.read(reinterpret_cast<char*>(fsCode.data()), fsSize);
@@ -690,17 +719,16 @@ void Engine::createPipeline()
     shaderModuleCreateInfos[1].codeSize = fsSize;
     shaderModuleCreateInfos[1].pCode = fsCode.data();
     VkShaderModule fragmentShaderModule;
-    res = vkCreateShaderModule(mDevice, &shaderModuleCreateInfos[0], NULL, &fragmentShaderModule);
+    res = vkCreateShaderModule(mDevice, &shaderModuleCreateInfos[1], NULL, &fragmentShaderModule);
     assertVkSuccess(res, "failed to create fs module");
 
-    VkPipelineShaderStageCreateInfo fragmentShaderCreateInfo {}; //fragment shader create info
-    fragmentShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragmentShaderCreateInfo.pNext = NULL;
-    fragmentShaderCreateInfo.flags = 0;
-    fragmentShaderCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragmentShaderCreateInfo.module = fragmentShaderModule;
-    fragmentShaderCreateInfo.pName = "main";
-    fragmentShaderCreateInfo.pSpecializationInfo = NULL;
+    shaderStageCreateInfos[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStageCreateInfos[1].pNext = NULL;
+    shaderStageCreateInfos[1].flags = 0;
+    shaderStageCreateInfos[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStageCreateInfos[1].module = fragmentShaderModule;
+    shaderStageCreateInfos[1].pName = "main";
+    shaderStageCreateInfos[1].pSpecializationInfo = NULL;
 
     struct alignas(16) Vertex
     {
@@ -712,12 +740,10 @@ void Engine::createPipeline()
     VkVertexInputBindingDescription bindingDescription {};
     bindingDescription.binding = 0; //indeks vertexbuff z którego będą pobierane atrybuty
     bindingDescription.stride = sizeof(Vertex);
-    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; //indeksuję vertexbuff indeksem wierzchołków
     //binding = 1, przykładowo vertex input instance - gdy do rysowania kilka elementów
 
-    std::vector<VkVertexInputAttributeDescription> vertexAttributesDescriptions;
-    vertexAttributesDescriptions.resize(2);
-
+    std::vector<VkVertexInputAttributeDescription> vertexAttributesDescriptions(2);
     vertexAttributesDescriptions[0].location = 0;  //vertex position
     vertexAttributesDescriptions[0].binding = 0;
     vertexAttributesDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -728,37 +754,127 @@ void Engine::createPipeline()
     vertexAttributesDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
     vertexAttributesDescriptions[1].offset = 16; //odległość Vertex::color od początku struktury czyli rozmiar Vertex::position
 
-    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo;
+    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo{};
     vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputCreateInfo.pNext = NULL;
     vertexInputCreateInfo.flags = 0;
     vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
     vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputCreateInfo.vertexAttributeDescriptionCount = 2; //vertex color and position
+    vertexInputCreateInfo.vertexAttributeDescriptionCount = vertexAttributesDescriptions.size(); //vertex color and position
     vertexInputCreateInfo.pVertexAttributeDescriptions = vertexAttributesDescriptions.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo{};
+    inputAssemblyCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssemblyCreateInfo.pNext = NULL;
+    inputAssemblyCreateInfo.flags = 0;
+    inputAssemblyCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0;
+    viewport.y = mSwapchainHeight;
+    viewport.width = mSwapchainWidth;
+    viewport.height = -static_cast<float>(mSwapchainHeight);
+    viewport.minDepth = 0;
+    viewport.maxDepth = 1;
+
+    VkRect2D scissor{};
+    scissor.extent = {mSwapchainWidth, mSwapchainHeight};
+    scissor.offset = {0, 0};
+
+    VkPipelineViewportStateCreateInfo viewportStateCreateInfo{};
+    viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportStateCreateInfo.pNext = NULL;
+    viewportStateCreateInfo.flags = 0;
+    viewportStateCreateInfo.viewportCount = 1;
+    viewportStateCreateInfo.pViewports = &viewport;
+    viewportStateCreateInfo.scissorCount = 1;
+    viewportStateCreateInfo.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo{};
+    rasterizationStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizationStateCreateInfo.pNext = NULL;
+    rasterizationStateCreateInfo.flags = 0;
+    rasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
+    rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
+    rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE; // wyłączam, że jeżeli trójkąty są z tyłu to ich nie rysuję
+    rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE; //nie ma znaczenia bo cullmode = off
+    rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
+    rasterizationStateCreateInfo.depthBiasConstantFactor = 0;
+    rasterizationStateCreateInfo.depthBiasClamp = 0;
+    rasterizationStateCreateInfo.depthBiasSlopeFactor = 0;
+    rasterizationStateCreateInfo.lineWidth = 1;
+
+    VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo{};
+    multisampleStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampleStateCreateInfo.pNext = NULL;
+    multisampleStateCreateInfo.flags = 0;
+    multisampleStateCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampleStateCreateInfo.sampleShadingEnable = VK_FALSE; // czy fragment shader jest odpalany dla sampli
+    multisampleStateCreateInfo.minSampleShading = 0;
+    multisampleStateCreateInfo.pSampleMask = NULL;
+    multisampleStateCreateInfo.alphaToCoverageEnable = VK_FALSE;
+    multisampleStateCreateInfo.alphaToOneEnable = VK_FALSE;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{};
+    depthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencilStateCreateInfo.pNext = NULL;
+    depthStencilStateCreateInfo.flags = 0;
+    depthStencilStateCreateInfo.depthTestEnable = VK_TRUE; // czy sprawdzamy dla każdego pixela głębię i ją porównujemy
+    depthStencilStateCreateInfo.depthWriteEnable = VK_TRUE; // jeśli przejdzie test to czy zapisujemy
+    depthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
+    depthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
+    depthStencilStateCreateInfo.front = {};
+    depthStencilStateCreateInfo.back = {};
+    depthStencilStateCreateInfo.minDepthBounds = 0;
+    depthStencilStateCreateInfo.maxDepthBounds = 0;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachmentState{};
+    colorBlendAttachmentState.blendEnable = VK_FALSE;
+    colorBlendAttachmentState.srcColorBlendFactor = {};
+    colorBlendAttachmentState.dstColorBlendFactor = {};
+    colorBlendAttachmentState.colorBlendOp = {};
+    colorBlendAttachmentState.srcAlphaBlendFactor = {};
+    colorBlendAttachmentState.dstAlphaBlendFactor = {};
+    colorBlendAttachmentState.alphaBlendOp = {};
+    colorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{};
+    colorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlendStateCreateInfo.pNext = NULL;
+    colorBlendStateCreateInfo.flags = 0;
+    colorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
+    colorBlendStateCreateInfo.logicOp = {};
+    colorBlendStateCreateInfo.attachmentCount = 1;
+    colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
+//    colorBlendStateCreateInfo.blendConstants;
 
     VkGraphicsPipelineCreateInfo pipelineCreateInfo;
     pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineCreateInfo.pNext = NULL;
     pipelineCreateInfo.flags = 0;
-    pipelineCreateInfo.stageCount;
-    pipelineCreateInfo.pStages;
+    pipelineCreateInfo.stageCount = shaderStageCreateInfos.size();
+    pipelineCreateInfo.pStages = shaderStageCreateInfos.data();
     pipelineCreateInfo.pVertexInputState = &vertexInputCreateInfo;
-    pipelineCreateInfo.pInputAssemblyState;
-    pipelineCreateInfo.pTessellationState;
-    pipelineCreateInfo.pViewportState;
-    pipelineCreateInfo.pRasterizationState;
-    pipelineCreateInfo.pMultisampleState;
-    pipelineCreateInfo.pDepthStencilState;
-    pipelineCreateInfo.pColorBlendState;
-    pipelineCreateInfo.pDynamicState;
-    pipelineCreateInfo.layout = pipelineLayout;
+    pipelineCreateInfo.pInputAssemblyState = &inputAssemblyCreateInfo;
+    pipelineCreateInfo.pTessellationState = NULL;
+    pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
+    pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
+    pipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
+    pipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
+    pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
+    pipelineCreateInfo.pDynamicState = NULL;
+    pipelineCreateInfo.layout = mPipelineLayout;
     pipelineCreateInfo.renderPass = mRenderPass;
     pipelineCreateInfo.subpass = 0;
     pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineCreateInfo.basePipelineIndex = -1;
 
     res = vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &mPipeline);
+    vkDestroyShaderModule(mDevice, vertexShaderModule, NULL); //niszczę bo niepotrzebne
+    vkDestroyShaderModule(mDevice, fragmentShaderModule, NULL);
     assertVkSuccess(res, "failed to create pipeline");
 }
 
@@ -771,7 +887,7 @@ void Engine::render(uint32_t frameIndex)
     VkCommandBuffer cmdBuff = mCommandBuffers[frameIndex];
     uint32_t currentSwapchainImageIndex = 0;
 
-    res = vkAcquireNextImageKHR(mDevice, mSwapchain, UINT64_MAX, mAcquireSemaphores[frameIndex], VK_NULL_HANDLE, &currentSwapchainImageIndex);
+    res = vkAcquireNextImageKHR(mDevice, mSwapchain, UINT64_MAX, mAcquireSemaphores[frameIndex], VK_NULL_HANDLE, &currentSwapchainImageIndex); //semafor azasygnalizowany kiedy obrazek będzie dostępny do rysowania
     assertVkSuccess(res, "failed to get current swapchain image index");
 
     /*-------- Begin Command Buffer ----------*/
@@ -780,17 +896,17 @@ void Engine::render(uint32_t frameIndex)
 
     VkClearColorValue clearColorValue;
     clearColorValue.float32[0] = 0.0f;
-    clearColorValue.float32[1] = 0.0f;
-    clearColorValue.float32[2] = 0.0f;
+    clearColorValue.float32[1] = 0.5f;
+    clearColorValue.float32[2] = 0.5f;
     clearColorValue.float32[3] = 0.0f;
 
     VkClearDepthStencilValue clearDepthValue;
     clearDepthValue.depth = 1.0f;
     //clearDepthValue.stencil; ignored - no stencil
 
-    VkClearValue clearValues;
-    clearValues.color = clearColorValue;
-    clearValues.depthStencil = clearDepthValue;
+    std::vector<VkClearValue> clearValues(2);
+    clearValues[0].color = clearColorValue;
+    clearValues[1].depthStencil = clearDepthValue;
 
     VkRenderPassBeginInfo renderPassBeginInfo {};
     renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -799,8 +915,8 @@ void Engine::render(uint32_t frameIndex)
     renderPassBeginInfo.framebuffer = mFramebuffers[currentSwapchainImageIndex];
     renderPassBeginInfo.renderArea.offset = {0,0};
     renderPassBeginInfo.renderArea.extent = {mWindowWidth, mWindowHeight};
-    renderPassBeginInfo.clearValueCount = 2;
-    renderPassBeginInfo.pClearValues = &clearValues;
+    renderPassBeginInfo.clearValueCount = clearValues.size();
+    renderPassBeginInfo.pClearValues = clearValues.data();
 
     /*----------- Begin RenderPass ----------*/
     vkCmdBeginRenderPass(cmdBuff, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -812,20 +928,21 @@ void Engine::render(uint32_t frameIndex)
     assertVkSuccess(res, "failed to end command buffers");
     /*--------- End Command Buffer ----------*/
 
-    VkPipelineStageFlags pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkPipelineStageFlags pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;  // to jest po to, że jak semafor nie jest zasygnalizowany to nie pisze do obrazka, bo ten jeszcze
+    // nie jest na to gotowy, optymalizacja, żeby karta mogła wykonwyać dziąłania na przód
 
     VkSubmitInfo submitInfo {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.pNext = NULL;
     submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &mAcquireSemaphores[frameIndex];
-    submitInfo.pWaitDstStageMask = &pipelineStageFlags;
+    submitInfo.pWaitSemaphores = &mAcquireSemaphores[frameIndex]; //przekazuje semafor na ktory ma zaczekac karta
+    submitInfo.pWaitDstStageMask = &pipelineStageFlags; // podajemy faze wykonania pipelinu na ktorym karta ma zaczekac na semafor
     submitInfo.commandBufferCount = 1; // jeden bo jednocześnie chcę wysłać 1 cmdbuff
     submitInfo.pCommandBuffers = &cmdBuff;
     submitInfo.signalSemaphoreCount = 1; // liczba semaforów, która będzie sygnalizowała że command buffer się wykonał
     submitInfo.pSignalSemaphores = &mQueueSubmitSemaphores[frameIndex]; // wskaźnik na ten semafor
 
-    res = vkQueueSubmit(mQueue, 1, &submitInfo, mQueueSubmitFences[frameIndex]);
+    res = vkQueueSubmit(mQueue, 1, &submitInfo, mQueueSubmitFences[frameIndex]); //fence zasygnalizowany gdy koemndy na karcie zostaną wykonane
     assertVkSuccess(res, "failed to queue submit");
 
     VkPresentInfoKHR presentInfo {};
@@ -846,9 +963,13 @@ void Engine::run()
 {
     uint32_t imageIndex = 1;
 
-    while(mRun)
+    while(true)
     {
         mWindow.handleEvents();
+        if(mRun == false)
+        {
+            break;
+        }
         render((imageIndex % mFramesInFlight));
         imageIndex++;
     }

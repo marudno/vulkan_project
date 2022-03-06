@@ -47,6 +47,7 @@ Window::Window(Engine* enginePointer, uint16_t windowWidth, uint16_t windowHeigh
 
 Window::~Window()
 {
+    DestroyWindow(mHwnd);
     UnregisterClass(mClassName, mHinstance);
 }
 
@@ -72,7 +73,6 @@ LRESULT Window::myWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_KEYDOWN:
         if(wParam == VK_ESCAPE) //przyrównujemy do wParam, bo ma informację o tym jaki klawisz jest wciśnięty
         {
-            DestroyWindow(hwnd);
             mEnginePointer->stop();
         }
         return 0;

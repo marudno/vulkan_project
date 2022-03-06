@@ -15,8 +15,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 
 if(WIN32)
 
-include_directories(C:/VulkanSDK/1.1.108.0/Include/vulkan)
-target_link_libraries(${PROJECT_NAME} C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib)
+include_directories(C:/VulkanSDK/1.3.204.0/Include/vulkan)
+target_link_libraries(${PROJECT_NAME} C:/VulkanSDK/1.3.204.0/Lib/vulkan-1.lib)
 
 elseif(UNIX)
 
